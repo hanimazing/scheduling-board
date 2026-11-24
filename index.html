@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Install Scheduling Board — FASTSIGNS Charlotte</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#0A2540; --red:#C8102E; --ink:#1B2733; --grey:#5A6B7F; --line:#C9D2DC;
+    --bg:#EEF1F5; --card:#FFFFFF; --soft:#F7F9FB; --ok:#1E7B34; --warn:#B26A00; --bad:#B3261E;
+    --hannah:#7B4FA6; --jordan:#0E6E6E;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--navy);color:#fff;padding:14px 20px 12px;border-bottom:4px solid var(--red)}
+  header h1{margin:0;font-size:20px;letter-spacing:.4px}
+  header .sub{color:#D7DEE7;font-size:12.5px;margin-top:3px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line)}
+  .toolbar .spacer{flex:1}
+  button{font:inherit;font-size:13.5px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:7px 13px;cursor:pointer}
+  button:hover{border-color:var(--grey)}
+  button.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+  button.red{background:var(--red);color:#fff;border-color:var(--red)}
+  button.ghost{background:transparent}
+  button.small{padding:4px 10px;font-size:12.5px;border-radius:7px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .viewbtn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .actorwrap{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--grey)}
+  .actorbtn.active-h{background:var(--hannah);color:#fff;border-color:var(--hannah)}
+  .actorbtn.active-j{background:var(--jordan);color:#fff;border-color:var(--jordan)}
+  .modebadge{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FFF3D6;color:var(--warn);border:1px solid #E8C96A}
+  .modebadge.shared{background:#E2F2E5;color:var(--ok);border-color:#9CCBA6}
+  main{padding:16px 20px 40px}
+  /* Board */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(215px,1fr));gap:12px;align-items:start}
+  @media (max-width:1200px){.board{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.board{grid-template-columns:1fr}}
+  .col{background:var(--soft);border:1px solid var(--line);border-radius:10px;min-height:120px}
+  .col h3{margin:0;padding:10px 12px;font-size:12.5px;letter-spacing:.6px;color:var(--navy);border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .col h3 .count{background:var(--navy);color:#fff;border-radius:12px;padding:0 8px;font-size:11.5px}
+  .col .cards{padding:10px;display:flex;flex-direction:column;gap:10px}
+  .empty{color:var(--grey);font-size:12.5px;text-align:center;padding:12px 4px}
+  .card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--navy);border-radius:8px;padding:10px 12px;cursor:pointer;box-shadow:0 1px 2px rgba(10,37,64,.06)}
+  .card:hover{border-color:var(--grey)}
+  .card .job{font-weight:700;font-size:14px}
+  .card .cust{font-size:13px;margin:1px 0 5px}
+  .card .meta{font-size:12px;color:var(--grey);line-height:1.5}
+  .card .dateline{margin-top:7px;font-size:12.5px;font-weight:600}
+  .card .last{margin-top:5px;font-size:12px;color:var(--grey);font-style:italic}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:1.5px 8px;border-radius:12px;background:var(--bg);border:1px solid var(--line);color:var(--navy)}
+  .pill.survey{background:#EFE7F7;border-color:#CBB3E6;color:#5B2E86}
+  .pill.heavy{background:#FDECEC;border-color:#F0B4B4;color:var(--bad)}
+  .pill.due-soon{background:#FFF3D6;border-color:#E8C96A;color:var(--warn)}
+  /* Week view */
+  .weeknav{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .weekgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+  @media (max-width:1100px){.weekgrid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:640px){.weekgrid{grid-template-columns:1fr}}
+  .day{background:#fff;border:1px solid var(--line);border-radius:10px;min-height:130px;padding:10px}
+  .day.today{border-color:var(--red);border-width:2px}
+  .day h4{margin:0 0 2px;font-size:13px;color:var(--navy)}
+  .day .dow{font-size:11px;color:var(--grey);letter-spacing:.5px}
+  .day .jobitem{border-top:1px solid var(--bg);padding:7px 0;font-size:12.5px}
+  .day .jobitem:first-of-type{border-top:none}
+  .day .loads{margin-top:8px;border-top:1px dashed var(--line);padding-top:7px;font-size:12px;color:var(--grey);line-height:1.55}
+  .loadwarn{color:var(--bad);font-weight:700}
+  /* Drawer / modal */
+  .overlay{position:fixed;inset:0;background:rgba(10,37,64,.45);display:none;z-index:40}
+  .overlay.open{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,96vw);background:#fff;z-index:50;transform:translateX(105%);transition:transform .22s ease;overflow-y:auto;box-shadow:-4px 0 18px rgba(0,0,0,.2)}
+  .drawer.open{transform:translateX(0)}
+  .drawer .dhead{background:var(--navy);color:#fff;padding:16px 20px 13px;position:sticky;top:0}
+  .drawer .dhead h2{margin:0;font-size:17px}
+  .drawer .dhead .sub{color:#D7DEE7;font-size:12.5px;margin-top:2px}
+  .drawer .dbody{padding:16px 20px 30px}
+  .kv{display:grid;grid-template-columns:110px 1fr;gap:5px 10px;font-size:13.5px;margin-bottom:14px}
+  .kv dt{color:var(--grey);font-weight:700;font-size:11.5px;letter-spacing:.4px;padding-top:2px}
+  .kv dd{margin:0}
+  .thread{border-top:2px solid var(--bg);margin-top:6px}
+  .event{padding:10px 0;border-bottom:1px solid var(--bg);font-size:13.5px}
+  .event .who{font-weight:700}
+  .event .who.hannah{color:var(--hannah)} .event .who.jordan{color:var(--jordan)} .event .who.system{color:var(--grey)}
+  .event .when{color:var(--grey);font-size:12px;margin-left:6px}
+  .event .body{margin-top:3px;line-height:1.5}
+  .event .propdate{display:inline-block;margin-top:4px;background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-weight:700;font-size:13px}
+  .event.proposed .propdate{border-color:var(--hannah)}
+  .event.countered .propdate{border-color:var(--jordan)}
+  .event.agreed .propdate{background:#E2F2E5;border-color:#9CCBA6}
+  .actions{border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-top:16px;background:var(--soft)}
+  .actions h4{margin:0 0 9px;font-size:12.5px;letter-spacing:.5px;color:var(--navy)}
+  .actions .row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:9px}
+  .actions label{font-size:12.5px;color:var(--grey);display:block;margin:7px 0 3px}
+  input,select,textarea{font:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:56px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .checkline{display:flex;gap:7px;align-items:center;font-size:13.5px;margin:8px 0}
+  .checkline input{width:auto}
+  .modal{position:fixed;inset:0;display:none;z-index:60;align-items:flex-start;justify-content:center;padding:26px 14px;background:rgba(10,37,64,.45);overflow-y:auto}
+  .modal.open{display:flex}
+  .modal .sheet{background:#fff;border-radius:12px;width:min(620px,96vw);padding:20px 22px 24px}
+  .modal h2{margin:0 0 4px;font-size:17px;color:var(--navy)}
+  .modal .hint{font-size:12.5px;color:var(--grey);margin-bottom:12px}
+  .signin{background:#fff;border:1px solid var(--line);border-radius:12px;max-width:460px;margin:60px auto;padding:24px}
+  .signin h2{margin:0 0 6px;color:var(--navy);font-size:18px}
+  .signin p{font-size:13.5px;color:var(--grey);line-height:1.55}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:9px;font-size:13.5px;z-index:99;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+  .archrow{background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px 14px;margin-bottom:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .archrow .grow{flex:1;min-width:200px}
+  .archrow .job{font-weight:700}
+  .muted{color:var(--grey);font-size:12.5px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>INSTALL SCHEDULING BOARD</h1>
+  <div class="sub">FASTSIGNS Charlotte — South Tryon &nbsp;•&nbsp; Install requests, date proposals &amp; decisions between Hannah Ewing and Jordan Blake</div>
+</header>
+
+<div class="toolbar">
+  <button class="viewbtn active" id="btnBoard" onclick="showView('board')">Board</button>
+  <button class="viewbtn" id="btnWeek" onclick="showView('week')">Week view</button>
+  <button class="viewbtn" id="btnArchive" onclick="showView('archive')">Archive</button>
+  <span class="modebadge" id="modeBadge">DEMO MODE — saved on this device only</span>
+  <div class="spacer"></div>
+  <div class="actorwrap" id="actorWrap">
+    <span>Acting as:</span>
+    <button class="actorbtn" id="actorHannah" onclick="setActor('Hannah')">Hannah</button>
+    <button class="actorbtn" id="actorJordan" onclick="setActor('Jordan')">Jordan</button>
+  </div>
+  <button onclick="refreshData()">↻ Refresh</button>
+  <button class="primary" onclick="openNew()">+ New request</button>
+  <button class="ghost hidden" id="btnSignOut" onclick="signOut()">Sign out</button>
+</div>
+
+<main>
+  <div id="viewSignin" class="hidden">
+    <div class="signin">
+      <h2>Sign in</h2>
+      <p>Enter your FASTSIGNS email and we'll send you a sign-in link. Use the same email every time — that's how the board knows whether you're Hannah or Jordan.</p>
+      <label class="muted">Email</label>
+      <input id="signinEmail" type="email" placeholder="you@fastsigns.com" style="margin:5px 0 12px">
+      <button class="primary" style="width:100%" onclick="sendMagicLink()">Email me a sign-in link</button>
+      <p id="signinMsg" class="muted" style="margin-top:10px"></p>
+    </div>
+  </div>
+
+  <div id="viewBoard"><div class="board" id="board"></div></div>
+
+  <div id="viewWeek" class="hidden">
+    <div class="weeknav">
+      <button onclick="shiftWeek(-1)">← Prev week</button>
+      <button onclick="shiftWeek(0)">This week</button>
+      <button onclick="shiftWeek(1)">Next week →</button>
+      <strong id="weekLabel" style="margin-left:8px"></strong>
+    </div>
+    <div class="weekgrid" id="weekGrid"></div>
+    <p class="muted" style="margin-top:12px">Only <b>Agreed</b> and <b>Tracker Updated</b> installs appear here. Loads count the installers named on the agreed crew. Days over 8 hours for one installer, and heavy-labor days for Eli, are flagged.</p>
+  </div>
+
+  <div id="viewArchive" class="hidden">
+    <p class="muted" style="margin-top:0">Completed installs live here — nothing is ever deleted. Open one to see the full scheduling history, or send it back to the board.</p>
+    <div id="archiveList"></div>
+  </div>
+</main>
+
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer"></aside>
+
+<div class="modal" id="newModal">
+  <div class="sheet">
+    <h2>New install request</h2>
+    <div class="hint">Log the request as it came in. Hannah reviews it and proposes a date; Jordan approves or counters on the card.</div>
+    <div class="grid2">
+      <div><label class="muted">Job #</label><input id="nJob" placeholder="I-CH-97xxx"></div>
+      <div><label class="muted">Type</label><select id="nType"><option value="install">Install</option><option value="survey">Survey</option><option value="removal">Removal</option></select></div>
+    </div>
+    <label class="muted">Customer</label><input id="nCustomer" placeholder="Customer / site name">
+    <label class="muted">Address</label><input id="nAddress" placeholder="Street, City, ST ZIP">
+    <label class="muted">Scope — what gets installed</label><textarea id="nScope" placeholder="Products, sizes, where they go"></textarea>
+    <div class="grid2">
+      <div><label class="muted">Est. hours</label><input id="nHours" type="number" step="0.25" min="0" placeholder="1.5"></div>
+      <div><label class="muted">Due date (if any)</label><input id="nDue" type="date"></div>
+    </div>
+    <label class="muted">Crew needed</label><input id="nCrew" placeholder="Eli / George / Eli + George / Eli + MZ">
+    <label class="muted">Requested by</label><input id="nRequester" placeholder="Rep or contact who sent the request">
+    <label class="muted">Constraints / notes</label><textarea id="nNotes" placeholder="Product readiness, customer availability, permit status, anything that affects the date"></textarea>
+    <label class="checkline"><input type="checkbox" id="nHeavy"> Heavy labor (digging, post &amp; panel, heavy lifts) — flags Eli's load</label>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="primary" onclick="createRequest()">Add request</button>
+      <button onclick="closeNew()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG — leave both blank for local demo mode.
+   For shared mode (Hannah + Jordan), paste the Supabase project
+   URL and anon key from the setup checklist, then host this file
+   (e.g. Netlify Drop) and open it from that address.
+   ============================================================ */
+const SUPABASE_URL = "https://kozaqywyttgzwuckvsjm.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemFxeXd5dHRnend1Y2t2c2ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1NDgyMjcsImV4cCI6MjExMTEyNDIyN30.3CHC-whJz8HtD3xgaNvQ73WbA6WRZHlAFkUM_DyM83g";
+
+const SHARED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+const STATUSES = [
+  {id:"new",       label:"NEW REQUESTS"},
+  {id:"proposed",  label:"DATE PROPOSED"},
+  {id:"countered", label:"COUNTERED"},
+  {id:"agreed",    label:"AGREED"},
+  {id:"tracker",   label:"TRACKER UPDATED"},
+];
+const INSTALLERS = ["Eli","George","MZ"];
+
+/* ---------------- State ---------------- */
+let actor = localStorage.getItem("sched_actor") || "Hannah";
+let requests = [], events = [];
+let sb = null, session = null;
+let weekOffset = 0, currentView = "board", openId = null;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function nowISO(){ return new Date().toISOString(); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fmtDate(iso){
+  if(!iso) return "—";
+  const d = new Date(iso.length<=10 ? iso+"T12:00:00" : iso);
+  return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+}
+function fmtDT(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " " + d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+}
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  setTimeout(()=>t.style.display="none", 2600);
+}
+
+/* ---------------- Seed (demo mode, first run only) ---------------- */
+function seed(){
+  // Public build: board starts empty. Requests are added in the app.
+  requests = [];
+  events = [];
+  saveLocal();
+}
+function saveLocal(){ localStorage.setItem("schedboard_v1", JSON.stringify({requests, events})); }
+function loadLocal(){
+  const raw = localStorage.getItem("schedboard_v1");
+  if(!raw){ seed(); return; }
+  try{ const d = JSON.parse(raw); requests = d.requests||[]; events = d.events||[]; }
+  catch(e){ seed(); }
+}
+
+/* ---------------- Data layer ---------------- */
+async function loadData(){
+  if(!SHARED){ loadLocal(); render(); return; }
+  const { data: reqs, error: e1 } = await sb.from("sched_requests").select("*").order("created_at",{ascending:true});
+  const { data: evs,  error: e2 } = await sb.from("sched_events").select("*").order("created_at",{ascending:true});
+  if(e1 || e2){ toast("Could not load from Supabase — check connection."); return; }
+  requests = reqs; events = evs; render();
+}
+async function addRequest(r, ev){
+  if(!SHARED){ requests.push(r); events.push(ev); saveLocal(); render(); return; }
+  const { error: e1 } = await sb.from("sched_requests").insert(r);
+  if(e1){ toast("Save failed: " + e1.message); return; }
+  if(ev) await sb.from("sched_events").insert(ev);
+  await loadData();
+}
+async function updateRequest(id, patch){
+  if(!SHARED){
+    const r = requests.find(x=>x.id===id); if(r) Object.assign(r, patch);
+    saveLocal(); render(); if(openId===id) renderDrawer(); return;
+  }
+  const { error } = await sb.from("sched_requests").update(patch).eq("id", id);
+  if(error){ toast("Update failed: " + error.message); return; }
+  await loadData(); if(openId===id) renderDrawer();
+}
+async function addEvent(ev, reqPatch){
+  if(!SHARED){
+    events.push(ev);
+    if(reqPatch){ const r = requests.find(x=>x.id===ev.request_id); if(r) Object.assign(r, reqPatch); }
+    saveLocal(); render(); if(openId===ev.request_id) renderDrawer(); return;
+  }
+  const { error } = await sb.from("sched_events").insert(ev);
+  if(error){ toast("Save failed: " + error.message); return; }
+  if(reqPatch){
+    const { error: e2 } = await sb.from("sched_requests").update(reqPatch).eq("id", ev.request_id);
+    if(e2){ toast("Update failed: " + e2.message); return; }
+  }
+  await loadData(); if(openId===ev.request_id) renderDrawer();
+}
+function reqEvents(id){ return events.filter(e=>e.request_id===id).sort((a,b)=>a.created_at<b.created_at?-1:1); }
+function lastProposal(id){
+  const evs = reqEvents(id).filter(e=>e.type==="proposed"||e.type==="countered");
+  return evs.length ? evs[evs.length-1] : null;
+}
+function refreshData(){ loadData(); toast("Refreshed"); }
+
+/* ---------------- Views ---------------- */
+function showView(v){
+  currentView = v;
+  ["Board","Week","Archive"].forEach(x=>document.getElementById("btn"+x).classList.toggle("active", x.toLowerCase()===v));
+  document.getElementById("viewBoard").classList.toggle("hidden", v!=="board");
+  document.getElementById("viewWeek").classList.toggle("hidden", v!=="week");
+  document.getElementById("viewArchive").classList.toggle("hidden", v!=="archive");
+  render();
+}
+function render(){
+  if(currentView==="board") renderBoard();
+  if(currentView==="week") renderWeek();
+  if(currentView==="archive") renderArchive();
+}
+function duePill(r){
+  if(!r.due_date) return "";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(r.due_date+"T12:00:00");
+  const days = Math.round((due-today)/86400000);
+  if(days < 0) return ` <span class="pill due-soon">due ${fmtDate(r.due_date)} — past</span>`;
+  if(days <= 2) return ` <span class="pill due-soon">due ${fmtDate(r.due_date)}</span>`;
+  return ` <span class="pill">due ${fmtDate(r.due_date)}</span>`;
+}
+function cardHTML(r){
+  const lp = lastProposal(r.id);
+  let dateLine = "";
+  if(r.status==="agreed" || r.status==="tracker") dateLine = `<div class="dateline" style="color:var(--ok)">✓ ${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</div>`;
+  else if(lp) dateLine = `<div class="dateline">${lp.type==="countered"?"Countered: ":"Proposed: "}${fmtDate(lp.date)}${lp.crew?" — "+esc(lp.crew):""} <span style="color:var(--grey);font-weight:400">(by ${esc(lp.actor)})</span></div>`;
+  const evs = reqEvents(r.id);
+  const last = evs.length ? evs[evs.length-1] : null;
+  const lastTxt = last ? `<div class="last">${esc(last.actor)}: ${esc((last.body||"").slice(0,90))}${(last.body||"").length>90?"…":""}</div>` : "";
+  return `<div class="card" onclick="openDrawer('${r.id}')">
+    <div class="job">${esc(r.job_number||"—")}</div>
+    <div class="cust">${esc(r.customer||"")}</div>
+    <div class="meta">${r.type!=="install"?`<span class="pill survey">${esc(r.type.toUpperCase())}</span> `:""}${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
+    ${dateLine}${lastTxt}
+  </div>`;
+}
+function renderBoard(){
+  const board = document.getElementById("board");
+  board.innerHTML = STATUSES.map(s=>{
+    const items = requests.filter(r=>!r.archived && r.status===s.id);
+    return `<div class="col"><h3>${s.label}<span class="count">${items.length}</span></h3>
+      <div class="cards">${items.length?items.map(cardHTML).join(""):`<div class="empty">Nothing here</div>`}</div></div>`;
+  }).join("");
+}
+function mondayOf(offset){
+  const d = new Date(); d.setHours(0,0,0,0);
+  const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay()+6)%7) + offset*7);
+  return monday;
+}
+function shiftWeek(n){ weekOffset = n===0 ? 0 : weekOffset + n; renderWeek(); }
+function crewHours(crewStr, installer){
+  if(!crewStr) return false;
+  return crewStr.split("+").map(s=>s.trim()).some(p=>p.toLowerCase().startsWith(installer.toLowerCase()));
+}
+function renderWeek(){
+  const mon = mondayOf(weekOffset);
+  const days = [...Array(7)].map((_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
+  const iso = d=>d.toISOString().slice(0,10);
+  document.getElementById("weekLabel").textContent = "Week of " + mon.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+  const todayIso = iso(new Date());
+  document.getElementById("weekGrid").innerHTML = days.map(d=>{
+    const di = iso(d);
+    const jobs = requests.filter(r=>!r.archived && (r.status==="agreed"||r.status==="tracker") && r.agreed_date===di);
+    const loads = {};
+    INSTALLERS.forEach(n=>loads[n]=0);
+    let eliHeavy = 0;
+    jobs.forEach(r=>{ INSTALLERS.forEach(n=>{ if(crewHours(r.agreed_crew,n)) loads[n]+= (parseFloat(r.hours)||0); }); if(r.heavy && crewHours(r.agreed_crew,"Eli")) eliHeavy++; });
+    const loadLines = INSTALLERS.filter(n=>loads[n]>0).map(n=>{
+      const over = loads[n] > 8;
+      return `<div class="${over?"loadwarn":""}">${n}: ${loads[n]} hrs${over?" — over 8":""}</div>`;
+    }).join("");
+    const heavyLine = eliHeavy ? `<div class="loadwarn">⚠ ${eliHeavy} heavy-labor job${eliHeavy>1?"s":""} on Eli</div>` : "";
+    return `<div class="day ${di===todayIso?"today":""}">
+      <div class="dow">${d.toLocaleDateString("en-US",{weekday:"long"}).toUpperCase()}</div>
+      <h4>${d.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</h4>
+      ${jobs.length?jobs.map(r=>`<div class="jobitem"><b>${esc(r.job_number)}</b> ${esc(r.customer)}<br><span class="muted">${esc(r.agreed_crew||"")} • ${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.heavy?" • HEAVY":""}</span></div>`).join(""):`<div class="muted" style="padding-top:8px">No installs</div>`}
+      ${loadLines||heavyLine?`<div class="loads">${loadLines}${heavyLine}</div>`:""}
+    </div>`;
+  }).join("");
+}
+function renderArchive(){
+  const items = requests.filter(r=>r.archived).sort((a,b)=>(a.agreed_date||"")<(b.agreed_date||"")?1:-1);
+  document.getElementById("archiveList").innerHTML = items.length ? items.map(r=>`
+    <div class="archrow">
+      <div class="grow"><span class="job">${esc(r.job_number)}</span> — ${esc(r.customer)}
+      <div class="muted">Installed ${fmtDate(r.agreed_date)} • ${esc(r.agreed_crew||"")} • ${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}</div></div>
+      <button class="small" onclick="openDrawer('${r.id}')">View history</button>
+      <button class="small" onclick="unarchive('${r.id}')">Back to board</button>
+    </div>`).join("") : `<div class="empty">Nothing archived yet. Completed installs will live here — they are never deleted.</div>`;
+}
+
+/* ---------------- Drawer (the documented "meeting") ---------------- */
+function openDrawer(id){ openId = id; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
+function closeDrawer(){ openId = null; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
+function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board"}[t]||t; }
+function renderDrawer(){
+  const r = requests.find(x=>x.id===openId); if(!r) return;
+  const evs = reqEvents(r.id);
+  const lp = lastProposal(r.id);
+  const isH = actor==="Hannah", isJ = actor==="Jordan";
+  let actions = "";
+  if(r.archived){
+    actions = `<div class="actions"><h4>ARCHIVED</h4><div class="muted">This install is complete and archived. It stays here permanently — nothing is deleted.</div>
+      <div class="row" style="margin-top:10px"><button onclick="unarchive('${r.id}')">Back to board</button></div></div>`;
+  } else {
+    let inner = "";
+    if(r.status==="new" && isH) inner += proposeForm("Propose an install date", "Propose date");
+    if(r.status==="new" && isJ) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
+    if(r.status==="proposed" && isJ){
+      inner += `<div class="muted" style="margin-bottom:8px">Hannah proposed <b>${fmtDate(lp.date)}</b>${lp.crew?" with "+esc(lp.crew):""}. Approve it, or counter with an alternate date.</div>
+        <div class="row"><button class="primary" onclick="approve()">✓ Approve ${fmtDate(lp.date)}</button></div>` + proposeForm("Counter with an alternate date", "Send counter-proposal");
+    }
+    if(r.status==="proposed" && isH) inner += `<div class="muted">Waiting on Jordan — he can approve ${fmtDate(lp.date)} or counter with another date.</div>` + proposeForm("Change my proposal", "Re-propose date");
+    if(r.status==="countered" && isH){
+      inner += `<div class="muted" style="margin-bottom:8px">Jordan countered with <b>${fmtDate(lp.date)}</b>${lp.crew?" with "+esc(lp.crew):""}. Accept it, or propose a different date.</div>
+        <div class="row"><button class="primary" onclick="acceptCounter()">✓ Accept ${fmtDate(lp.date)}</button></div>` + proposeForm("Propose a different date", "Propose date");
+    }
+    if(r.status==="countered" && isJ) inner += `<div class="muted">Waiting on Hannah — she can accept ${fmtDate(lp.date)} or propose a different date.</div>` + proposeForm("Change my counter", "Re-counter");
+    if(r.status==="agreed"){
+      inner += `<div class="muted" style="margin-bottom:8px">Agreed: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. Hannah updates the tracker and systems next.</div>`;
+      if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button></div>`;
+      inner += proposeForm("Re-open with a new date", "Propose new date");
+    }
+    if(r.status==="tracker"){
+      inner += `<div class="muted" style="margin-bottom:8px">On the tracker for <b>${fmtDate(r.agreed_date)}</b>. When the install is done, archive it — it stays on record, nothing is deleted.</div>
+      <div class="row"><button class="red" onclick="completeInstall()">Install completed → Archive</button></div>`;
+    }
+    inner += `<label>Note for the record</label><textarea id="aNote" placeholder="Add a note to this request's history"></textarea>
+      <div class="row" style="margin-top:8px"><button onclick="addNote()">Add note</button></div>`;
+    actions = `<div class="actions"><h4>ACTIONS — acting as ${esc(actor).toUpperCase()}</h4>${inner}</div>`;
+  }
+  document.getElementById("drawer").innerHTML = `
+    <div class="dhead"><h2>${esc(r.job_number||"—")} — ${esc(r.customer||"")}</h2>
+      <div class="sub">${esc(r.address||"")} ${r.type!=="install"?" • "+esc(r.type.toUpperCase()):""}</div></div>
+    <div class="dbody">
+      <dl class="kv">
+        <dt>STATUS</dt><dd><b>${esc((STATUSES.find(s=>s.id===r.status)||{}).label||(r.archived?"ARCHIVED":r.status))}</b>${r.archived?" (archived)":""}</dd>
+        <dt>SCOPE</dt><dd>${esc(r.scope||"—")}</dd>
+        <dt>HOURS</dt><dd>${r.hours!=null&&r.hours!==""?esc(r.hours):"—"}${r.heavy?' &nbsp;<span class="pill heavy">HEAVY LABOR</span>':""}</dd>
+        <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"—")}</dd>
+        <dt>DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"—"}</dd>
+        <dt>REQUESTED BY</dt><dd>${esc(r.requested_by||"—")}</dd>
+        <dt>NOTES</dt><dd>${esc(r.notes||"—")}</dd>
+        ${r.agreed_date?`<dt>AGREED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
+      </dl>
+      <h3 style="color:var(--navy);font-size:13px;letter-spacing:.5px;margin:4px 0 2px">SCHEDULING HISTORY — THE MEETING, ON RECORD</h3>
+      <div class="thread">${evs.map(e=>`
+        <div class="event ${e.type}">
+          <span class="who ${e.actor==="Hannah"?"hannah":e.actor==="Jordan"?"jordan":"system"}">${esc(e.actor)}</span>
+          <span style="font-weight:600">• ${esc(typeLabel(e.type))}</span>
+          <span class="when">${fmtDT(e.created_at)}</span>
+          ${e.date?`<div><span class="propdate">${fmtDate(e.date)}${e.crew?" — "+esc(e.crew):""}</span></div>`:""}
+          ${e.body?`<div class="body">${esc(e.body)}</div>`:""}
+        </div>`).join("")}
+      </div>
+      ${actions}
+      <div style="margin-top:16px"><button class="ghost" onclick="closeDrawer()">← Back to board</button></div>
+    </div>`;
+}
+function proposeForm(title, btn){
+  return `<label>${title}</label>
+    <div class="grid2">
+      <div><input type="date" id="aDate"></div>
+      <div><input type="text" id="aCrew" placeholder="Crew — Eli / George / Eli + George"></div>
+    </div>
+    <label>Note</label><textarea id="aBody" placeholder="Why this date — what's already on the schedule, product readiness, customer timing"></textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" onclick="submitProposal()">${btn}</button></div>`;
+}
+
+/* ---------------- Actions ---------------- */
+function evBase(type){ return {id:uid(), request_id:openId, actor:actor, type:type, body:"", date:null, crew:null, created_at:nowISO()}; }
+async function submitProposal(){
+  const date = document.getElementById("aDate").value;
+  const crew = document.getElementById("aCrew").value.trim();
+  const body = document.getElementById("aBody").value.trim();
+  if(!date){ toast("Pick a date first"); return; }
+  const r = requests.find(x=>x.id===openId);
+  const isCounter = (r.status==="proposed" && actor==="Jordan") || r.status==="countered";
+  const ev = evBase(isCounter ? "countered" : "proposed");
+  ev.date = date; ev.crew = crew || null; ev.body = body;
+  await addEvent(ev, {status: isCounter ? "countered" : "proposed"});
+  toast(isCounter ? "Counter-proposal sent" : "Date proposed");
+}
+async function approve(){
+  const lp = lastProposal(openId); if(!lp) return;
+  const ev = evBase("approved"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Approved as proposed.";
+  await addEvent(ev, {status:"agreed", agreed_date:lp.date, agreed_crew:lp.crew});
+  toast("Approved — date agreed");
+}
+async function acceptCounter(){
+  const lp = lastProposal(openId); if(!lp) return;
+  const ev = evBase("accepted"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Counter accepted.";
+  await addEvent(ev, {status:"agreed", agreed_date:lp.date, agreed_crew:lp.crew});
+  toast("Counter accepted — date agreed");
+}
+async function addNote(){
+  const body = document.getElementById("aNote").value.trim();
+  if(!body){ toast("Write a note first"); return; }
+  const ev = evBase("comment"); ev.body = body;
+  await addEvent(ev, null);
+}
+async function markTracker(){
+  const ev = evBase("tracker"); ev.body = "Tracker and systems updated.";
+  await addEvent(ev, {status:"tracker"});
+  toast("Marked tracker updated");
+}
+async function completeInstall(){
+  const ev = evBase("completed"); ev.body = "Install completed — archived (kept on record, not deleted).";
+  await addEvent(ev, {archived:true});
+  closeDrawer(); showView("archive");
+  toast("Archived — on record in the Archive");
+}
+async function unarchive(id){
+  openId = id;
+  const ev = evBase("unarchived"); ev.request_id = id; ev.body = "Sent back to the board.";
+  await addEvent(ev, {archived:false, status:"tracker"});
+  toast("Back on the board");
+}
+
+/* ---------------- New request ---------------- */
+function openNew(){ document.getElementById("newModal").classList.add("open"); }
+function closeNew(){ document.getElementById("newModal").classList.remove("open"); }
+async function createRequest(){
+  const customer = document.getElementById("nCustomer").value.trim();
+  const job = document.getElementById("nJob").value.trim();
+  if(!customer && !job){ toast("Give it at least a customer or a job #"); return; }
+  const h = document.getElementById("nHours").value;
+  const r = { id:uid(), job_number:job, type:document.getElementById("nType").value, customer:customer,
+    address:document.getElementById("nAddress").value.trim(), scope:document.getElementById("nScope").value.trim(),
+    hours: h===""?null:parseFloat(h), due_date:document.getElementById("nDue").value||null,
+    crew_needed:document.getElementById("nCrew").value.trim(), requested_by:document.getElementById("nRequester").value.trim(),
+    notes:document.getElementById("nNotes").value.trim(), heavy:document.getElementById("nHeavy").checked,
+    status:"new", agreed_date:null, agreed_crew:null, archived:false, created_at:nowISO() };
+  const ev = { id:uid(), request_id:r.id, actor:actor, type:"created", body:"Request logged.", date:null, crew:null, created_at:nowISO() };
+  await addRequest(r, ev);
+  closeNew();
+  ["nJob","nCustomer","nAddress","nScope","nHours","nDue","nCrew","nRequester","nNotes"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("nHeavy").checked = false;
+  toast("Request added to the board");
+}
+
+/* ---------------- Actor / auth ---------------- */
+function setActor(a){
+  actor = a; localStorage.setItem("sched_actor", a);
+  paintActor(); if(openId) renderDrawer();
+}
+function paintActor(){
+  const h = document.getElementById("actorHannah"), j = document.getElementById("actorJordan");
+  h.className = "actorbtn" + (actor==="Hannah" ? " active-h" : "");
+  j.className = "actorbtn" + (actor==="Jordan" ? " active-j" : "");
+}
+function actorFromEmail(email){
+  const e = (email||"").toLowerCase();
+  if(e.includes("jordan") || e.includes("blake")) return "Jordan";
+  if(e.includes("hannah") || e.includes("ewing")) return "Hannah";
+  return email;
+}
+async function sendMagicLink(){
+  const email = document.getElementById("signinEmail").value.trim();
+  const msg = document.getElementById("signinMsg");
+  if(!email){ msg.textContent = "Enter your email first."; return; }
+  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href.split("#")[0] } });
+  msg.textContent = error ? ("Couldn't send: " + error.message) : "Link sent — check your inbox and open it on this device.";
+}
+async function signOut(){ if(sb) await sb.auth.signOut(); location.reload(); }
+
+async function init(){
+  paintActor();
+  if(!SHARED){
+    document.getElementById("modeBadge").textContent = "DEMO MODE — saved on this device only";
+    loadData(); return;
+  }
+  document.getElementById("modeBadge").textContent = "SHARED MODE — Hannah + Jordan";
+  document.getElementById("modeBadge").classList.add("shared");
+  document.getElementById("actorWrap").style.display = "none";
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  if(!session){
+    document.getElementById("viewSignin").classList.remove("hidden");
+    document.getElementById("viewBoard").classList.add("hidden");
+    sb.auth.onAuthStateChange((evt, s)=>{ if(s) location.reload(); });
+    return;
+  }
+  actor = actorFromEmail(session.user.email);
+  document.getElementById("btnSignOut").classList.remove("hidden");
+  document.querySelector("header .sub").textContent += "  •  Signed in as " + session.user.email + " (" + actor + ")";
+  await loadData();
+}
+init();
+</script>
+</body>
+</html>
