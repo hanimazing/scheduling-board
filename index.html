@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Install Scheduling Board — FASTSIGNS Charlotte</title>
+<title>The Meeting Room — FASTSIGNS Charlotte</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -110,13 +110,60 @@
   .archrow .job{font-weight:700}
   .muted{color:var(--grey);font-size:12.5px}
   .hidden{display:none!important}
+  /* Lobby / rooms */
+  .rooms{display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:14px;max-width:900px;margin:22px auto 0}
+  @media (max-width:640px){.rooms{grid-template-columns:1fr}}
+  .roomcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(10,37,64,.07)}
+  .roomcard.live{cursor:pointer;border-left:6px solid var(--red)}
+  .roomcard.live:hover{border-color:var(--grey)}
+  .roomcard .rname{font-size:17px;font-weight:700;color:var(--navy)}
+  .roomcard .rdesc{font-size:13.5px;color:var(--grey);margin-top:5px;line-height:1.5}
+  .roomcard .rgo{margin-top:12px;font-weight:700;color:var(--red);font-size:13.5px}
+  .roomcard.soon{opacity:.55}
+  .roombanner{display:flex;gap:12px;align-items:center;background:#fff;border-bottom:1px solid var(--line);padding:10px 20px}
+  .roombanner .rtitle{font-weight:700;color:var(--navy);letter-spacing:.5px;font-size:14.5px}
+  .roombanner .rsub{font-size:12px;color:var(--grey)}
 </style>
 </head>
 <body>
 <header>
-  <h1>INSTALL SCHEDULING BOARD</h1>
-  <div class="sub">FASTSIGNS Charlotte — South Tryon &nbsp;•&nbsp; Install requests, date proposals &amp; decisions between Hannah Ewing and Jordan Blake</div>
+  <h1>THE MEETING ROOM</h1>
+  <div class="sub">FASTSIGNS Charlotte — South Tryon &nbsp;•&nbsp; One app, one room per team. Pick a room to get started.</div>
 </header>
+
+<div id="screenLobby" class="hidden">
+  <main>
+    <div style="text-align:right;max-width:900px;margin:0 auto"><button class="ghost" onclick="signOut()">Sign out</button></div>
+    <div class="rooms">
+      <div class="roomcard live" onclick="enterRoom()">
+        <div class="rname">Installation Room</div>
+        <div class="rdesc">Install scheduling — requests, date proposals and decisions between Hannah Ewing and Jordan Blake.</div>
+        <div class="rgo">Enter room →</div>
+      </div>
+      <div class="roomcard soon">
+        <div class="rname">Sales Room</div>
+        <div class="rdesc">Coming soon.</div>
+      </div>
+      <div class="roomcard soon">
+        <div class="rname">PM Room</div>
+        <div class="rdesc">Coming soon.</div>
+      </div>
+      <div class="roomcard soon">
+        <div class="rname">Management Room</div>
+        <div class="rdesc">Coming soon.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="screenRoom" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="goLobby()">← Lobby</button>
+  <div>
+    <div class="rtitle">INSTALLATION ROOM</div>
+    <div class="rsub">Install requests, date proposals &amp; decisions — Hannah Ewing &amp; Jordan Blake</div>
+  </div>
+</div>
 
 <div class="toolbar">
   <button class="viewbtn active" id="btnBoard" onclick="showView('board')">Board</button>
@@ -164,6 +211,7 @@
     <div id="archiveList"></div>
   </div>
 </main>
+</div><!-- /screenRoom -->
 
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"></aside>
@@ -299,6 +347,14 @@ function lastProposal(id){
   return evs.length ? evs[evs.length-1] : null;
 }
 function refreshData(){ loadData(); toast("Refreshed"); }
+
+/* ---------------- Screens / rooms ---------------- */
+function showScreen(name){
+  document.getElementById("screenLobby").classList.toggle("hidden", name!=="lobby");
+  document.getElementById("screenRoom").classList.toggle("hidden", name!=="room");
+}
+function enterRoom(){ showScreen("room"); showView("board"); }
+function goLobby(){ closeDrawer(); showScreen("lobby"); }
 
 /* ---------------- Views ---------------- */
 function showView(v){
@@ -556,7 +612,7 @@ function paintActor(){
 function actorFromEmail(email){
   const e = (email||"").toLowerCase();
   if(e.includes("jordan") || e.includes("blake")) return "Jordan";
-  if(e.includes("hannah") || e.includes("ewing")) return "Hannah";
+  if(e.includes("hannah") || e.includes("ewing") || e.includes("hanimazing")) return "Hannah";
   return email;
 }
 async function sendMagicLink(){
@@ -572,7 +628,7 @@ async function init(){
   paintActor();
   if(!SHARED){
     document.getElementById("modeBadge").textContent = "DEMO MODE — saved on this device only";
-    loadData(); return;
+    loadData(); showScreen("lobby"); return;
   }
   document.getElementById("modeBadge").textContent = "SHARED MODE — Hannah + Jordan";
   document.getElementById("modeBadge").classList.add("shared");
@@ -581,6 +637,7 @@ async function init(){
   const { data } = await sb.auth.getSession();
   session = data.session;
   if(!session){
+    showScreen("room");
     document.getElementById("viewSignin").classList.remove("hidden");
     document.getElementById("viewBoard").classList.add("hidden");
     sb.auth.onAuthStateChange((evt, s)=>{ if(s) location.reload(); });
@@ -589,6 +646,7 @@ async function init(){
   actor = actorFromEmail(session.user.email);
   document.getElementById("btnSignOut").classList.remove("hidden");
   document.querySelector("header .sub").textContent += "  •  Signed in as " + session.user.email + " (" + actor + ")";
+  showScreen("lobby");
   await loadData();
 }
 init();
