@@ -89,7 +89,9 @@
   .overlay.open{display:block}
   .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,96vw);background:#fff;z-index:50;transform:translateX(105%);transition:transform .22s ease;overflow-y:auto;box-shadow:-4px 0 18px rgba(0,0,0,.2)}
   .drawer.open{transform:translateX(0)}
-  .drawer .dhead{background:var(--navy);color:#fff;padding:16px 20px 13px;position:sticky;top:0}
+  .drawer .dhead{background:var(--navy);color:#fff;padding:16px 20px 13px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .editicon{background:#fff;color:var(--navy);border:1px solid #fff;font-size:15px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer;flex:none}
+  .editicon:hover{background:var(--bg)}
   .drawer .dhead h2{margin:0;font-size:17px}
   .drawer .dhead .sub{color:#D7DEE7;font-size:12.5px;margin-top:2px}
   .drawer .dbody{padding:16px 20px 30px}
@@ -296,6 +298,7 @@ let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
 let guideEditOpen = false;
 let ccamEditOpen = false;
+let editOpen = false;
 let typeFilter = "all";
 const TYPE_META = {
   install:{label:"FIELD INSTALL", pill:"field", card:"t-install"},
@@ -436,7 +439,7 @@ function cardHTML(r){
     <div class="cust">${esc(r.customer||"")}</div>
     <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">INSTALL GUIDE</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
-    ${actor==="Hannah" && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
+    ${isEditor() && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
   </div>`;
 }
 function setTypeFilter(f){ typeFilter = f; renderBoard(); }
@@ -503,8 +506,9 @@ function renderArchive(){
 }
 
 /* ---------------- Drawer (the documented "meeting") ---------------- */
-function openDrawer(id){ openId = id; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
-function closeDrawer(){ openId = null; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
+function openDrawer(id){ openId = id; editOpen = false; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
+function closeDrawer(){ openId = null; editOpen = false; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
+function toggleEdit(){ editOpen = !editOpen; renderDrawer(); }
 function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Install guide", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
@@ -512,25 +516,31 @@ function renderDrawer(){
   const lp = lastProposal(r.id);
   const pp = pendingProposal(r.id);
   const st = normStatus(r.status);
-  const isH = actor==="Hannah", isJ = actor==="Jordan";
+  const isH = isEditor(), isJ = !isH;
   let actions = "";
   if(r.archived){
     actions = `<div class="actions"><h4>ARCHIVED</h4><div class="muted">This install is complete and archived. It stays here permanently — nothing is deleted.</div>
       <div class="row" style="margin-top:10px"><button onclick="unarchive('${r.id}')">Back to board</button></div></div>`;
   } else {
     let inner = "";
-    if(pp && isJ && pp.actor!==actor){
-      inner += `<div class="muted" style="margin-bottom:8px">${esc(pp.actor)} proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Approve it, or counter with an alternate date.</div>
-        <div class="row"><button class="primary" onclick="approve()">✓ Approve ${fmtDate(pp.date)}</button></div>` + proposeForm("Counter with an alternate date", "Send counter-proposal");
+    if(pp && sideOf(pp.actor) !== (isH ? "H" : "J")){
+      if(isH){
+        inner += `<div class="muted" style="margin-bottom:8px">${esc(pp.actor)} proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Accept it, or propose a different date.</div>
+          <div class="row"><button class="primary" onclick="acceptCounter()">✓ Accept ${fmtDate(pp.date)}</button></div>` + proposeForm("Propose a different date", "Propose date");
+      } else {
+        inner += `<div class="muted" style="margin-bottom:8px">${esc(pp.actor)} proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Approve it, or counter with an alternate date.</div>
+          <div class="row"><button class="primary" onclick="approve()">✓ Approve ${fmtDate(pp.date)}</button></div>` + proposeForm("Counter with an alternate date", "Send counter-proposal");
+      }
     }
-    if(pp && isH && pp.actor==="Hannah"){
-      inner += `<div class="muted">Waiting on Jordan — he can approve ${fmtDate(pp.date)} or counter with another date.</div>` + proposeForm("Change my proposal", "Re-propose date");
+    if(pp && sideOf(pp.actor) === (isH ? "H" : "J")){
+      if(pp.actor === actor){
+        inner += isH
+          ? `<div class="muted">Waiting on Jordan — he can approve ${fmtDate(pp.date)} or counter with another date.</div>` + proposeForm("Change my proposal", "Re-propose date")
+          : `<div class="muted">Waiting on Hannah — she can accept ${fmtDate(pp.date)} or propose a different date.</div>` + proposeForm("Change my proposal", "Re-propose date");
+      } else {
+        inner += `<div class="muted">${esc(pp.actor)} proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""} — waiting on ${isH ? "Jordan" : "Hannah"}.</div>` + proposeForm("Change proposal", "Re-propose date");
+      }
     }
-    if(pp && isH && pp.actor==="Jordan"){
-      inner += `<div class="muted" style="margin-bottom:8px">Jordan proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Accept it, or propose a different date.</div>
-        <div class="row"><button class="primary" onclick="acceptCounter()">✓ Accept ${fmtDate(pp.date)}</button></div>` + proposeForm("Propose a different date", "Propose date");
-    }
-    if(pp && isJ && pp.actor==="Jordan") inner += `<div class="muted">Waiting on Hannah — she can accept ${fmtDate(pp.date)} or propose a different date.</div>` + proposeForm("Change my proposal", "Re-propose date");
     if(!pp && isH && ["new","in-review","ready","subcontracted"].includes(st)) inner += proposeForm("Propose an install date", "Propose date");
     if(!pp && isJ && ["new","in-review"].includes(st)) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
     if(!pp && isJ && st==="ready") inner += proposeForm("Propose an install date", "Propose date");
@@ -552,8 +562,10 @@ function renderDrawer(){
     actions = `<div class="actions"><h4>ACTIONS — acting as ${esc(actor).toUpperCase()}</h4>${inner}</div>`;
   }
   document.getElementById("drawer").innerHTML = `
-    <div class="dhead"><h2>${esc(r.job_number||"—")} — ${esc(r.customer||"")}</h2>
+    <div class="dhead"><div><h2>${esc(r.job_number||"—")} — ${esc(r.customer||"")}</h2>
       <div class="sub">${esc(r.address||"")} • ${typeMeta(r.type).label}</div></div>
+      ${isH && !r.archived ? `<button class="editicon" onclick="toggleEdit()" title="Edit details">✎</button>` : ""}
+    </div>
     <div class="dbody">
       <dl class="kv">
         <dt>STATUS</dt><dd><b>${esc(statusLabel(normStatus(r.status)))}</b>${r.archived?" (archived)":""}</dd>
@@ -570,14 +582,14 @@ function renderDrawer(){
       <h3 style="color:var(--navy);font-size:13px;letter-spacing:.5px;margin:4px 0 2px">SCHEDULING HISTORY — THE MEETING, ON RECORD</h3>
       <div class="thread">${evs.map(e=>`
         <div class="event ${e.type}">
-          <span class="who ${e.actor==="Hannah"?"hannah":e.actor==="Jordan"?"jordan":"system"}">${esc(e.actor)}</span>
+          <span class="who ${e.actor==="Hannah"?"hannah":(e.actor==="Jordan"||e.actor==="Hannah (personal)")?"jordan":"system"}">${esc(e.actor)}</span>
           <span style="font-weight:600">• ${esc(typeLabel(e.type))}</span>
           <span class="when">${fmtDT(e.created_at)}</span>
           ${e.date?`<div><span class="propdate">${fmtDate(e.date)}${e.crew?" — "+esc(e.crew):""}</span></div>`:""}
           ${e.body?`<div class="body">${esc(e.body)}</div>`:""}
         </div>`).join("")}
       </div>
-      ${isH && !r.archived ? editSection(r) : ""}
+      ${isH && !r.archived && editOpen ? editSection(r) : ""}
       ${actions}
       <div style="margin-top:16px"><button class="ghost" onclick="closeDrawer()">← Back to board</button></div>
     </div>`;
@@ -635,13 +647,13 @@ function guideSection(r){
     inner += `<div style="margin-bottom:8px"><b>${esc(r.guide_name||"Install guide")}</b></div>
       <div class="row">
         <button class="primary" onclick="window.open('${esc(r.guide_url)}','_blank')">View / print guide</button>
-        <button onclick="toggleGuideEdit()">${guideEditOpen?"Cancel":"Replace link"}</button>
-        <button class="red" onclick="removeGuide()">Remove</button>
+        ${isEditor() ? `<button onclick="toggleGuideEdit()">${guideEditOpen?"Cancel":"Replace link"}</button>
+        <button class="red" onclick="removeGuide()">Remove</button>` : ""}
       </div>`;
   } else {
-    inner += `<div class="muted" style="margin-bottom:8px">No install guide attached yet. Drop the guide PDF in the <b>Work Orders</b> folder in Google Drive with this job number in the file name and it links here automatically — or paste its Drive link below.</div>`;
+    inner += `<div class="muted" style="margin-bottom:8px">No install guide attached yet.${isEditor() ? ` Drop the guide PDF in the <b>Work Orders</b> folder in Google Drive with this job number in the file name and it links here automatically — or paste its Drive link below.` : ""}</div>`;
   }
-  if(!r.guide_url || guideEditOpen){
+  if(isEditor() && (!r.guide_url || guideEditOpen)){
     inner += `<label>Drive link to the guide PDF</label>
       <input type="text" id="gUrl" placeholder="Paste the Google Drive link">
       <label>File name (optional)</label>
@@ -655,6 +667,7 @@ function guideSection(r){
 }
 function toggleGuideEdit(){ guideEditOpen = !guideEditOpen; renderDrawer(); }
 async function attachGuide(){
+  if(!isEditor()) return;
   const url = document.getElementById("gUrl").value.trim();
   const name = document.getElementById("gName").value.trim();
   if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid Drive link first"); return; }
@@ -666,6 +679,7 @@ async function attachGuide(){
   toast("Install guide attached");
 }
 async function removeGuide(){
+  if(!isEditor()) return;
   const ev = evBase("guide"); ev.body = "Install guide removed.";
   guideEditOpen = false;
   await addEvent(ev, {guide_url:null, guide_name:null});
@@ -679,13 +693,13 @@ function companycamSection(r){
     inner += `<div style="margin-bottom:8px"><b>${esc(r.companycam_name||"CompanyCam project")}</b></div>
       <div class="row">
         <button class="primary" onclick="window.open('${esc(r.companycam_url)}','_blank')">Open in CompanyCam</button>
-        <button onclick="toggleCcamEdit()">${ccamEditOpen?"Cancel":"Replace link"}</button>
-        <button class="red" onclick="removeCompanycam()">Remove</button>
+        ${isEditor() ? `<button onclick="toggleCcamEdit()">${ccamEditOpen?"Cancel":"Replace link"}</button>
+        <button class="red" onclick="removeCompanycam()">Remove</button>` : ""}
       </div>`;
   } else {
-    inner += `<div class="muted" style="margin-bottom:8px">No CompanyCam project linked yet. New and In-Review cards are scanned against CompanyCam every hour and linked automatically when the order number matches — or paste the project link below.</div>`;
+    inner += `<div class="muted" style="margin-bottom:8px">No CompanyCam project linked yet. New and In-Review cards are scanned against CompanyCam every hour and linked automatically when the order number matches.${isEditor() ? " — or paste the project link below." : ""}</div>`;
   }
-  if(!r.companycam_url || ccamEditOpen){
+  if(isEditor() && (!r.companycam_url || ccamEditOpen)){
     inner += `<label>CompanyCam project link</label>
       <input type="text" id="cUrl" placeholder="Paste the CompanyCam project link">
       <label>Project name (optional)</label>
@@ -696,6 +710,7 @@ function companycamSection(r){
 }
 function toggleCcamEdit(){ ccamEditOpen = !ccamEditOpen; renderDrawer(); }
 async function attachCompanycam(){
+  if(!isEditor()) return;
   const url = document.getElementById("cUrl").value.trim();
   const name = document.getElementById("cName").value.trim();
   if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid CompanyCam link first"); return; }
@@ -707,6 +722,7 @@ async function attachCompanycam(){
   toast("CompanyCam project linked");
 }
 async function removeCompanycam(){
+  if(!isEditor()) return;
   const ev = evBase("companycam"); ev.body = "CompanyCam project link removed.";
   ccamEditOpen = false;
   await addEvent(ev, {companycam_url:null, companycam_name:null});
@@ -738,6 +754,7 @@ async function unarchive(id){
 
 /* ---------------- Editing (Hannah) ---------------- */
 async function setStatus(id, value){
+  if(!isEditor()) return;
   const r = requests.find(x=>x.id===id); if(!r) return;
   if(normStatus(r.status)===value) return;
   const drawerOpen = document.getElementById("drawer").classList.contains("open") && openId===id;
@@ -778,6 +795,7 @@ function editSection(r){
   </div>`;
 }
 async function saveEdit(){
+  if(!isEditor()) return;
   const r = requests.find(x=>x.id===openId); if(!r) return;
   const h = document.getElementById("eHours").value;
   const newStatus = document.getElementById("eStatus").value;
@@ -799,6 +817,7 @@ async function saveEdit(){
   ev.body = normStatus(r.status)!==newStatus
     ? "Details edited. Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(newStatus) + "."
     : "Details edited.";
+  editOpen = false;
   await addEvent(ev, patch);
   toast("Changes saved");
 }
@@ -838,9 +857,15 @@ function paintActor(){
 function actorFromEmail(email){
   const e = (email||"").toLowerCase();
   if(e.includes("jordan") || e.includes("blake")) return "Jordan";
-  if(e.includes("hannah") || e.includes("ewing") || e.includes("hanimazing")) return "Hannah";
+  if(e.includes("hanimazing")) return "Hannah (personal)";
+  if(e.includes("hannah") || e.includes("ewing")) return "Hannah";
   return email;
 }
+function isEditor(){
+  if(SHARED && session) return (session.user.email||"").toLowerCase() === "hannah.ewing@fastsigns.com";
+  return actor === "Hannah";
+}
+function sideOf(a){ return a === "Hannah" ? "H" : "J"; }
 async function sendMagicLink(){
   const email = document.getElementById("signinEmail").value.trim();
   const msg = document.getElementById("signinMsg");
