@@ -54,6 +54,7 @@
   .pill.heavy{background:#FDECEC;border-color:#F0B4B4;color:var(--bad)}
   .pill.due-soon{background:#FFF3D6;border-color:#E8C96A;color:var(--warn)}
   .pill.guide{background:#E2F2E5;border-color:#9CCBA6;color:var(--ok)}
+  .pill.ccam{background:#E6F0F5;border-color:#A8C4D4;color:#20506B}
   .card.t-install{border-left-color:#7B2CBF}
   .card.t-vehicle{border-left-color:#0085CA}
   .card.t-survey{border-left-color:#D96C00}
@@ -294,6 +295,7 @@ let requests = [], events = [];
 let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
 let guideEditOpen = false;
+let ccamEditOpen = false;
 let typeFilter = "all";
 const TYPE_META = {
   install:{label:"FIELD INSTALL", pill:"field", card:"t-install"},
@@ -432,7 +434,7 @@ function cardHTML(r){
   return `<div class="card ${typeMeta(r.type).card}" onclick="openDrawer('${r.id}')">
     <div class="job">${esc(r.job_number||"—")}</div>
     <div class="cust">${esc(r.customer||"")}</div>
-    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">INSTALL GUIDE</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
+    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">INSTALL GUIDE</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
     ${actor==="Hannah" && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
   </div>`;
@@ -503,7 +505,7 @@ function renderArchive(){
 /* ---------------- Drawer (the documented "meeting") ---------------- */
 function openDrawer(id){ openId = id; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
 function closeDrawer(){ openId = null; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
-function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Install guide", edited:"Details edited", status:"Status changed"}[t]||t; }
+function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Install guide", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
   const evs = reqEvents(r.id);
@@ -564,6 +566,7 @@ function renderDrawer(){
         ${r.agreed_date?`<dt>AGREED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
       </dl>
       ${guideSection(r)}
+      ${companycamSection(r)}
       <h3 style="color:var(--navy);font-size:13px;letter-spacing:.5px;margin:4px 0 2px">SCHEDULING HISTORY — THE MEETING, ON RECORD</h3>
       <div class="thread">${evs.map(e=>`
         <div class="event ${e.type}">
@@ -667,6 +670,47 @@ async function removeGuide(){
   guideEditOpen = false;
   await addEvent(ev, {guide_url:null, guide_name:null});
   toast("Install guide removed");
+}
+
+/* ---------------- CompanyCam project link ---------------- */
+function companycamSection(r){
+  let inner = "";
+  if(r.companycam_url){
+    inner += `<div style="margin-bottom:8px"><b>${esc(r.companycam_name||"CompanyCam project")}</b></div>
+      <div class="row">
+        <button class="primary" onclick="window.open('${esc(r.companycam_url)}','_blank')">Open in CompanyCam</button>
+        <button onclick="toggleCcamEdit()">${ccamEditOpen?"Cancel":"Replace link"}</button>
+        <button class="red" onclick="removeCompanycam()">Remove</button>
+      </div>`;
+  } else {
+    inner += `<div class="muted" style="margin-bottom:8px">No CompanyCam project linked yet. New and In-Review cards are scanned against CompanyCam every hour and linked automatically when the order number matches — or paste the project link below.</div>`;
+  }
+  if(!r.companycam_url || ccamEditOpen){
+    inner += `<label>CompanyCam project link</label>
+      <input type="text" id="cUrl" placeholder="Paste the CompanyCam project link">
+      <label>Project name (optional)</label>
+      <input type="text" id="cName" placeholder="e.g. 96917 PowerGrid">
+      <div class="row" style="margin-top:8px"><button class="primary" onclick="attachCompanycam()">Link project</button></div>`;
+  }
+  return `<div class="actions"><h4>COMPANYCAM</h4>${inner}</div>`;
+}
+function toggleCcamEdit(){ ccamEditOpen = !ccamEditOpen; renderDrawer(); }
+async function attachCompanycam(){
+  const url = document.getElementById("cUrl").value.trim();
+  const name = document.getElementById("cName").value.trim();
+  if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid CompanyCam link first"); return; }
+  const r = requests.find(x=>x.id===openId);
+  const ev = evBase("companycam");
+  ev.body = (r && r.companycam_url ? "CompanyCam project replaced: " : "CompanyCam project linked: ") + (name || "CompanyCam project");
+  ccamEditOpen = false;
+  await addEvent(ev, {companycam_url:url, companycam_name:name || "CompanyCam project"});
+  toast("CompanyCam project linked");
+}
+async function removeCompanycam(){
+  const ev = evBase("companycam"); ev.body = "CompanyCam project link removed.";
+  ccamEditOpen = false;
+  await addEvent(ev, {companycam_url:null, companycam_name:null});
+  toast("CompanyCam link removed");
 }
 async function markTracker(){
   const ev = evBase("tracker"); ev.body = "Tracker and systems updated.";
