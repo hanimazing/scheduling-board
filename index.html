@@ -894,14 +894,14 @@ function editSection(r){
       <div style="padding-top:22px"><label style="display:inline"><input type="checkbox" id="eHeavy" ${r.heavy?"checked":""} style="width:auto"> Heavy labor</label></div>
     </div>
     <label>Notes</label><textarea id="eNotes">${esc(r.notes||"")}</textarea>
-    ${normStatus(r.status)!=="new" ? `<div style="margin-top:12px">
+    <div style="margin-top:12px">
       <label>Cover photo</label>
       ${r.cover_url ? `<img class="coverprev" src="${esc(r.cover_url)}" alt="">` : `<div class="muted">No cover photo yet — it shows at the top of the card.</div>`}
       <div class="row" style="margin-top:6px">
         <label class="uploadbtn">${r.cover_url ? "Replace photo" : "+ Upload cover photo"}<input type="file" accept="image/*" style="display:none" onchange="coverUpload(this)"></label>
         ${r.cover_url ? `<button type="button" style="color:#B3261E" onclick="coverRemove()">Remove photo</button>` : ""}
       </div>
-    </div>` : `<div class="hint" style="margin-top:12px">Cover photo unlocks once this request is In-Review.</div>`}
+    </div>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="saveEdit()">Save changes</button></div>
   </div>`;
 }
@@ -961,7 +961,6 @@ async function coverUpload(inp){
   if(!isEditor()) return;
   const f = (inp.files||[])[0]; if(!f) return;
   const r = requests.find(x=>x.id===openId); if(!r) return;
-  if(normStatus(r.status)==="new"){ toast("Cover photos unlock at In-Review"); return; }
   if(!SHARED){
     const url = await new Promise(res=>{ const rd = new FileReader(); rd.onload = ()=>res(rd.result); rd.readAsDataURL(f); });
     await patchRequest(openId, {cover_url: url, cover_path: ""});
