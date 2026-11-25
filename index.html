@@ -33,7 +33,8 @@
   .modebadge.shared{background:#E2F2E5;color:var(--ok);border-color:#9CCBA6}
   main{padding:16px 20px 40px}
   /* Board */
-  .board{display:grid;grid-template-columns:repeat(5,minmax(215px,1fr));gap:12px;align-items:start}
+  .board{display:grid;grid-template-columns:repeat(7,minmax(205px,1fr));gap:12px;align-items:start}
+  .card select.statusbar{width:100%;margin-top:8px;padding:5px 6px;font-size:12.5px}
   @media (max-width:1200px){.board{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:640px){.board{grid-template-columns:1fr}}
   .col{background:var(--soft);border:1px solid var(--line);border-radius:10px;min-height:120px}
@@ -52,6 +53,7 @@
   .pill.survey{background:#EFE7F7;border-color:#CBB3E6;color:#5B2E86}
   .pill.heavy{background:#FDECEC;border-color:#F0B4B4;color:var(--bad)}
   .pill.due-soon{background:#FFF3D6;border-color:#E8C96A;color:var(--warn)}
+  .pill.guide{background:#E2F2E5;border-color:#9CCBA6;color:var(--ok)}
   .card.t-install{border-left-color:#7B2CBF}
   .card.t-vehicle{border-left-color:#0085CA}
   .card.t-survey{border-left-color:#D96C00}
@@ -270,14 +272,20 @@
 const SUPABASE_URL = "https://kozaqywyttgzwuckvsjm.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvemFxeXd5dHRnend1Y2t2c2ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1NDgyMjcsImV4cCI6MjExMTEyNDIyN30.3CHC-whJz8HtD3xgaNvQ73WbA6WRZHlAFkUM_DyM83g";
 
+const WORK_ORDERS_FOLDER_URL = "https://drive.google.com/drive/folders/1vYDki7OBo9Jp-hdlBGK9hqgo8eilgk4J";
 const SHARED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 const STATUSES = [
-  {id:"new",       label:"NEW REQUESTS"},
-  {id:"proposed",  label:"DATE PROPOSED"},
-  {id:"countered", label:"COUNTERED"},
-  {id:"agreed",    label:"AGREED"},
-  {id:"tracker",   label:"TRACKER UPDATED"},
+  {id:"new",           label:"NEW"},
+  {id:"in-review",     label:"IN-REVIEW"},
+  {id:"ready",         label:"READY TO SCHEDULE"},
+  {id:"scheduled",     label:"SCHEDULED"},
+  {id:"in-progress",   label:"IN-PROGRESS"},
+  {id:"completed",     label:"COMPLETED"},
+  {id:"subcontracted", label:"SUBCONTRACTED"},
 ];
+const STATUS_LABELS = {new:"New","in-review":"In-Review",ready:"Ready to Schedule",scheduled:"Scheduled","in-progress":"In-Progress",completed:"Completed",subcontracted:"Subcontracted"};
+function statusLabel(id){ return STATUS_LABELS[id] || id || "New"; }
+function normStatus(s){ return {proposed:"ready",countered:"ready",agreed:"scheduled",tracker:"scheduled"}[s] || (STATUS_LABELS[s] ? s : "new"); }
 const INSTALLERS = ["Eli","George","MZ"];
 
 /* ---------------- State ---------------- */
@@ -285,6 +293,7 @@ let actor = localStorage.getItem("sched_actor") || "Hannah";
 let requests = [], events = [];
 let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
+let guideEditOpen = false;
 let typeFilter = "all";
 const TYPE_META = {
   install:{label:"FIELD INSTALL", pill:"field", card:"t-install"},
@@ -371,6 +380,14 @@ function lastProposal(id){
   const evs = reqEvents(id).filter(e=>e.type==="proposed"||e.type==="countered");
   return evs.length ? evs[evs.length-1] : null;
 }
+function pendingProposal(id){
+  const evs = reqEvents(id);
+  const lp = lastProposal(id);
+  if(!lp) return null;
+  const li = evs.lastIndexOf(lp);
+  const decided = evs.slice(li+1).some(e=>e.type==="approved"||e.type==="accepted");
+  return decided ? null : lp;
+}
 function refreshData(){ loadData(); toast("Refreshed"); }
 
 /* ---------------- Screens / rooms ---------------- */
@@ -407,7 +424,7 @@ function duePill(r){
 function cardHTML(r){
   const lp = lastProposal(r.id);
   let dateLine = "";
-  if(r.status==="agreed" || r.status==="tracker") dateLine = `<div class="dateline" style="color:var(--ok)">✓ ${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</div>`;
+  if(r.agreed_date && ["scheduled","in-progress","completed"].includes(normStatus(r.status))) dateLine = `<div class="dateline" style="color:var(--ok)">✓ ${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</div>`;
   else if(lp) dateLine = `<div class="dateline">${lp.type==="countered"?"Countered: ":"Proposed: "}${fmtDate(lp.date)}${lp.crew?" — "+esc(lp.crew):""} <span style="color:var(--grey);font-weight:400">(by ${esc(lp.actor)})</span></div>`;
   const evs = reqEvents(r.id);
   const last = evs.length ? evs[evs.length-1] : null;
@@ -415,8 +432,9 @@ function cardHTML(r){
   return `<div class="card ${typeMeta(r.type).card}" onclick="openDrawer('${r.id}')">
     <div class="job">${esc(r.job_number||"—")}</div>
     <div class="cust">${esc(r.customer||"")}</div>
-    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
+    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">INSTALL GUIDE</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
+    ${actor==="Hannah" && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
   </div>`;
 }
 function setTypeFilter(f){ typeFilter = f; renderBoard(); }
@@ -430,7 +448,7 @@ function renderBoard(){
   renderFilterBar();
   const board = document.getElementById("board");
   board.innerHTML = STATUSES.map(s=>{
-    const items = requests.filter(r=>!r.archived && r.status===s.id && (typeFilter==="all" || reqType(r)===typeFilter));
+    const items = requests.filter(r=>!r.archived && normStatus(r.status)===s.id && (typeFilter==="all" || reqType(r)===typeFilter));
     return `<div class="col"><h3>${s.label}<span class="count">${items.length}</span></h3>
       <div class="cards">${items.length?items.map(cardHTML).join(""):`<div class="empty">Nothing here</div>`}</div></div>`;
   }).join("");
@@ -453,7 +471,7 @@ function renderWeek(){
   const todayIso = iso(new Date());
   document.getElementById("weekGrid").innerHTML = days.map(d=>{
     const di = iso(d);
-    const jobs = requests.filter(r=>!r.archived && (r.status==="agreed"||r.status==="tracker") && r.agreed_date===di);
+    const jobs = requests.filter(r=>!r.archived && ["scheduled","in-progress"].includes(normStatus(r.status)) && r.agreed_date===di);
     const loads = {};
     INSTALLERS.forEach(n=>loads[n]=0);
     let eliHeavy = 0;
@@ -485,11 +503,13 @@ function renderArchive(){
 /* ---------------- Drawer (the documented "meeting") ---------------- */
 function openDrawer(id){ openId = id; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
 function closeDrawer(){ openId = null; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
-function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board"}[t]||t; }
+function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Install guide", edited:"Details edited", status:"Status changed"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
   const evs = reqEvents(r.id);
   const lp = lastProposal(r.id);
+  const pp = pendingProposal(r.id);
+  const st = normStatus(r.status);
   const isH = actor==="Hannah", isJ = actor==="Jordan";
   let actions = "";
   if(r.archived){
@@ -497,26 +517,33 @@ function renderDrawer(){
       <div class="row" style="margin-top:10px"><button onclick="unarchive('${r.id}')">Back to board</button></div></div>`;
   } else {
     let inner = "";
-    if(r.status==="new" && isH) inner += proposeForm("Propose an install date", "Propose date");
-    if(r.status==="new" && isJ) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
-    if(r.status==="proposed" && isJ){
-      inner += `<div class="muted" style="margin-bottom:8px">Hannah proposed <b>${fmtDate(lp.date)}</b>${lp.crew?" with "+esc(lp.crew):""}. Approve it, or counter with an alternate date.</div>
-        <div class="row"><button class="primary" onclick="approve()">✓ Approve ${fmtDate(lp.date)}</button></div>` + proposeForm("Counter with an alternate date", "Send counter-proposal");
+    if(pp && isJ && pp.actor!==actor){
+      inner += `<div class="muted" style="margin-bottom:8px">${esc(pp.actor)} proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Approve it, or counter with an alternate date.</div>
+        <div class="row"><button class="primary" onclick="approve()">✓ Approve ${fmtDate(pp.date)}</button></div>` + proposeForm("Counter with an alternate date", "Send counter-proposal");
     }
-    if(r.status==="proposed" && isH) inner += `<div class="muted">Waiting on Jordan — he can approve ${fmtDate(lp.date)} or counter with another date.</div>` + proposeForm("Change my proposal", "Re-propose date");
-    if(r.status==="countered" && isH){
-      inner += `<div class="muted" style="margin-bottom:8px">Jordan countered with <b>${fmtDate(lp.date)}</b>${lp.crew?" with "+esc(lp.crew):""}. Accept it, or propose a different date.</div>
-        <div class="row"><button class="primary" onclick="acceptCounter()">✓ Accept ${fmtDate(lp.date)}</button></div>` + proposeForm("Propose a different date", "Propose date");
+    if(pp && isH && pp.actor==="Hannah"){
+      inner += `<div class="muted">Waiting on Jordan — he can approve ${fmtDate(pp.date)} or counter with another date.</div>` + proposeForm("Change my proposal", "Re-propose date");
     }
-    if(r.status==="countered" && isJ) inner += `<div class="muted">Waiting on Hannah — she can accept ${fmtDate(lp.date)} or propose a different date.</div>` + proposeForm("Change my counter", "Re-counter");
-    if(r.status==="agreed"){
-      inner += `<div class="muted" style="margin-bottom:8px">Agreed: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. Hannah updates the tracker and systems next.</div>`;
-      if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button></div>`;
-      inner += proposeForm("Re-open with a new date", "Propose new date");
+    if(pp && isH && pp.actor==="Jordan"){
+      inner += `<div class="muted" style="margin-bottom:8px">Jordan proposed <b>${fmtDate(pp.date)}</b>${pp.crew?" with "+esc(pp.crew):""}. Accept it, or propose a different date.</div>
+        <div class="row"><button class="primary" onclick="acceptCounter()">✓ Accept ${fmtDate(pp.date)}</button></div>` + proposeForm("Propose a different date", "Propose date");
     }
-    if(r.status==="tracker"){
-      inner += `<div class="muted" style="margin-bottom:8px">On the tracker for <b>${fmtDate(r.agreed_date)}</b>. When the install is done, archive it — it stays on record, nothing is deleted.</div>
+    if(pp && isJ && pp.actor==="Jordan") inner += `<div class="muted">Waiting on Hannah — she can accept ${fmtDate(pp.date)} or propose a different date.</div>` + proposeForm("Change my proposal", "Re-propose date");
+    if(!pp && isH && ["new","in-review","ready","subcontracted"].includes(st)) inner += proposeForm("Propose an install date", "Propose date");
+    if(!pp && isJ && ["new","in-review"].includes(st)) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
+    if(!pp && isJ && st==="ready") inner += proposeForm("Propose an install date", "Propose date");
+    if(st==="scheduled"){
+      inner += `<div class="muted" style="margin-bottom:8px">Scheduled: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. Hannah updates the tracker and systems next.</div>`;
+      if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button><button onclick="startInstall()">Mark in-progress</button></div>`;
+      if(isH && !pp) inner += proposeForm("Re-open with a new date", "Propose new date");
+    }
+    if(st==="in-progress"){
+      inner += `<div class="muted" style="margin-bottom:8px">Install in progress${r.agreed_date?` — <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}`:""}. When it's done, archive it — it stays on record, nothing is deleted.</div>
       <div class="row"><button class="red" onclick="completeInstall()">Install completed → Archive</button></div>`;
+    }
+    if(st==="completed"){
+      inner += `<div class="muted" style="margin-bottom:8px">Marked completed. Archive it to file it in the Archive — it stays on record, nothing is deleted.</div>
+      <div class="row"><button class="red" onclick="completeInstall()">Archive</button></div>`;
     }
     inner += `<label>Note for the record</label><textarea id="aNote" placeholder="Add a note to this request's history"></textarea>
       <div class="row" style="margin-top:8px"><button onclick="addNote()">Add note</button></div>`;
@@ -527,7 +554,7 @@ function renderDrawer(){
       <div class="sub">${esc(r.address||"")} • ${typeMeta(r.type).label}</div></div>
     <div class="dbody">
       <dl class="kv">
-        <dt>STATUS</dt><dd><b>${esc((STATUSES.find(s=>s.id===r.status)||{}).label||(r.archived?"ARCHIVED":r.status))}</b>${r.archived?" (archived)":""}</dd>
+        <dt>STATUS</dt><dd><b>${esc(statusLabel(normStatus(r.status)))}</b>${r.archived?" (archived)":""}</dd>
         <dt>SCOPE</dt><dd>${esc(r.scope||"—")}</dd>
         <dt>HOURS</dt><dd>${r.hours!=null&&r.hours!==""?esc(r.hours):"—"}${r.heavy?' &nbsp;<span class="pill heavy">HEAVY LABOR</span>':""}</dd>
         <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"—")}</dd>
@@ -536,6 +563,7 @@ function renderDrawer(){
         <dt>NOTES</dt><dd>${esc(r.notes||"—")}</dd>
         ${r.agreed_date?`<dt>AGREED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
       </dl>
+      ${guideSection(r)}
       <h3 style="color:var(--navy);font-size:13px;letter-spacing:.5px;margin:4px 0 2px">SCHEDULING HISTORY — THE MEETING, ON RECORD</h3>
       <div class="thread">${evs.map(e=>`
         <div class="event ${e.type}">
@@ -546,6 +574,7 @@ function renderDrawer(){
           ${e.body?`<div class="body">${esc(e.body)}</div>`:""}
         </div>`).join("")}
       </div>
+      ${isH && !r.archived ? editSection(r) : ""}
       ${actions}
       <div style="margin-top:16px"><button class="ghost" onclick="closeDrawer()">← Back to board</button></div>
     </div>`;
@@ -568,22 +597,25 @@ async function submitProposal(){
   const body = document.getElementById("aBody").value.trim();
   if(!date){ toast("Pick a date first"); return; }
   const r = requests.find(x=>x.id===openId);
-  const isCounter = (r.status==="proposed" && actor==="Jordan") || r.status==="countered";
+  const pp = pendingProposal(openId);
+  const isCounter = !!pp && pp.actor !== actor;
   const ev = evBase(isCounter ? "countered" : "proposed");
   ev.date = date; ev.crew = crew || null; ev.body = body;
-  await addEvent(ev, {status: isCounter ? "countered" : "proposed"});
+  const cur = normStatus(r.status);
+  const patch = ["completed","subcontracted"].includes(cur) ? null : {status:"ready"};
+  await addEvent(ev, patch);
   toast(isCounter ? "Counter-proposal sent" : "Date proposed");
 }
 async function approve(){
   const lp = lastProposal(openId); if(!lp) return;
   const ev = evBase("approved"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Approved as proposed.";
-  await addEvent(ev, {status:"agreed", agreed_date:lp.date, agreed_crew:lp.crew});
+  await addEvent(ev, {status:"scheduled", agreed_date:lp.date, agreed_crew:lp.crew});
   toast("Approved — date agreed");
 }
 async function acceptCounter(){
   const lp = lastProposal(openId); if(!lp) return;
   const ev = evBase("accepted"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Counter accepted.";
-  await addEvent(ev, {status:"agreed", agreed_date:lp.date, agreed_crew:lp.crew});
+  await addEvent(ev, {status:"scheduled", agreed_date:lp.date, agreed_crew:lp.crew});
   toast("Counter accepted — date agreed");
 }
 async function addNote(){
@@ -592,22 +624,139 @@ async function addNote(){
   const ev = evBase("comment"); ev.body = body;
   await addEvent(ev, null);
 }
+
+/* ---------------- Install guide (Google Drive — Work Orders folder) ---------------- */
+function guideSection(r){
+  let inner = "";
+  if(r.guide_url){
+    inner += `<div style="margin-bottom:8px"><b>${esc(r.guide_name||"Install guide")}</b></div>
+      <div class="row">
+        <button class="primary" onclick="window.open('${esc(r.guide_url)}','_blank')">View / print guide</button>
+        <button onclick="toggleGuideEdit()">${guideEditOpen?"Cancel":"Replace link"}</button>
+        <button class="red" onclick="removeGuide()">Remove</button>
+      </div>`;
+  } else {
+    inner += `<div class="muted" style="margin-bottom:8px">No install guide attached yet. Drop the guide PDF in the <b>Work Orders</b> folder in Google Drive with this job number in the file name and it links here automatically — or paste its Drive link below.</div>`;
+  }
+  if(!r.guide_url || guideEditOpen){
+    inner += `<label>Drive link to the guide PDF</label>
+      <input type="text" id="gUrl" placeholder="Paste the Google Drive link">
+      <label>File name (optional)</label>
+      <input type="text" id="gName" placeholder="e.g. I-CH-96917 Install Guide.pdf">
+      <div class="row" style="margin-top:8px"><button class="primary" onclick="attachGuide()">Attach guide</button>
+      <button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Work Orders folder</button></div>`;
+  } else {
+    inner += `<div class="row" style="margin-top:8px"><button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Work Orders folder</button></div>`;
+  }
+  return `<div class="actions"><h4>INSTALL GUIDE</h4>${inner}</div>`;
+}
+function toggleGuideEdit(){ guideEditOpen = !guideEditOpen; renderDrawer(); }
+async function attachGuide(){
+  const url = document.getElementById("gUrl").value.trim();
+  const name = document.getElementById("gName").value.trim();
+  if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid Drive link first"); return; }
+  const r = requests.find(x=>x.id===openId);
+  const ev = evBase("guide");
+  ev.body = (r && r.guide_url ? "Install guide replaced: " : "Install guide attached: ") + (name || "Install guide");
+  guideEditOpen = false;
+  await addEvent(ev, {guide_url:url, guide_name:name || "Install guide"});
+  toast("Install guide attached");
+}
+async function removeGuide(){
+  const ev = evBase("guide"); ev.body = "Install guide removed.";
+  guideEditOpen = false;
+  await addEvent(ev, {guide_url:null, guide_name:null});
+  toast("Install guide removed");
+}
 async function markTracker(){
   const ev = evBase("tracker"); ev.body = "Tracker and systems updated.";
-  await addEvent(ev, {status:"tracker"});
+  await addEvent(ev, null);
   toast("Marked tracker updated");
+}
+async function startInstall(){
+  const ev = evBase("status"); ev.body = "Install marked in-progress.";
+  await addEvent(ev, {status:"in-progress"});
+  toast("Marked in-progress");
 }
 async function completeInstall(){
   const ev = evBase("completed"); ev.body = "Install completed — archived (kept on record, not deleted).";
-  await addEvent(ev, {archived:true});
+  await addEvent(ev, {archived:true, status:"completed"});
   closeDrawer(); showView("archive");
   toast("Archived — on record in the Archive");
 }
 async function unarchive(id){
   openId = id;
+  const r = requests.find(x=>x.id===id);
   const ev = evBase("unarchived"); ev.request_id = id; ev.body = "Sent back to the board.";
-  await addEvent(ev, {archived:false, status:"tracker"});
+  await addEvent(ev, {archived:false, status: (r && r.agreed_date) ? "scheduled" : "new"});
   toast("Back on the board");
+}
+
+/* ---------------- Editing (Hannah) ---------------- */
+async function setStatus(id, value){
+  const r = requests.find(x=>x.id===id); if(!r) return;
+  if(normStatus(r.status)===value) return;
+  const drawerOpen = document.getElementById("drawer").classList.contains("open") && openId===id;
+  const prevOpen = openId; openId = id;
+  const ev = evBase("status"); ev.request_id = id;
+  ev.body = "Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(value) + ".";
+  await addEvent(ev, {status:value});
+  if(!drawerOpen) openId = prevOpen;
+  toast("Status set to " + statusLabel(value));
+}
+function quickStatus(id, value){ setStatus(id, value); }
+function editSection(r){
+  const st = normStatus(r.status);
+  const typeOpts = Object.keys(TYPE_META).map(k=>`<option value="${k}" ${reqType(r)===k?"selected":""}>${TYPE_META[k].label}</option>`).join("");
+  const statusOpts = STATUSES.map(s=>`<option value="${s.id}" ${st===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("");
+  return `<div class="actions"><h4>EDIT DETAILS — HANNAH</h4>
+    <label>Status</label><select id="eStatus">${statusOpts}</select>
+    <div class="grid2">
+      <div><label>Job #</label><input type="text" id="eJob" value="${esc(r.job_number||"")}"></div>
+      <div><label>Customer</label><input type="text" id="eCustomer" value="${esc(r.customer||"")}"></div>
+    </div>
+    <label>Address</label><input type="text" id="eAddress" value="${esc(r.address||"")}">
+    <label>Scope</label><textarea id="eScope">${esc(r.scope||"")}</textarea>
+    <div class="grid2">
+      <div><label>Type</label><select id="eType">${typeOpts}</select></div>
+      <div><label>Hours</label><input type="number" step="0.1" id="eHours" value="${r.hours!=null&&r.hours!==""?esc(r.hours):""}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Crew needed</label><input type="text" id="eCrew" value="${esc(r.crew_needed||"")}"></div>
+      <div><label>Due date</label><input type="date" id="eDue" value="${r.due_date||""}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Requested by</label><input type="text" id="eRequester" value="${esc(r.requested_by||"")}"></div>
+      <div style="padding-top:22px"><label style="display:inline"><input type="checkbox" id="eHeavy" ${r.heavy?"checked":""} style="width:auto"> Heavy labor</label></div>
+    </div>
+    <label>Notes</label><textarea id="eNotes">${esc(r.notes||"")}</textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" onclick="saveEdit()">Save changes</button></div>
+  </div>`;
+}
+async function saveEdit(){
+  const r = requests.find(x=>x.id===openId); if(!r) return;
+  const h = document.getElementById("eHours").value;
+  const newStatus = document.getElementById("eStatus").value;
+  const patch = {
+    job_number: document.getElementById("eJob").value.trim(),
+    customer: document.getElementById("eCustomer").value.trim(),
+    address: document.getElementById("eAddress").value.trim(),
+    scope: document.getElementById("eScope").value.trim(),
+    type: document.getElementById("eType").value,
+    hours: h===""?null:parseFloat(h),
+    crew_needed: document.getElementById("eCrew").value.trim(),
+    due_date: document.getElementById("eDue").value||null,
+    requested_by: document.getElementById("eRequester").value.trim(),
+    heavy: document.getElementById("eHeavy").checked,
+    notes: document.getElementById("eNotes").value.trim(),
+    status: newStatus
+  };
+  const ev = evBase("edited");
+  ev.body = normStatus(r.status)!==newStatus
+    ? "Details edited. Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(newStatus) + "."
+    : "Details edited.";
+  await addEvent(ev, patch);
+  toast("Changes saved");
 }
 
 /* ---------------- New request ---------------- */
