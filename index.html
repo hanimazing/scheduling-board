@@ -92,6 +92,8 @@
   .drawer .dhead{background:var(--navy);color:#fff;padding:16px 20px 13px;position:sticky;top:0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
   .editicon{background:#fff;color:var(--navy);border:1px solid #fff;font-size:15px;line-height:1;padding:7px 10px;border-radius:8px;cursor:pointer;flex:none}
   .editicon:hover{background:var(--bg)}
+  .editicon.del{background:#FDECEC;color:#B3261E;border-color:#F6C9C6}
+  .editicon.del:hover{background:#FBD9D7}
   .drawer .dhead h2{margin:0;font-size:17px}
   .drawer .dhead .sub{color:#D7DEE7;font-size:12.5px;margin-top:2px}
   .drawer .dbody{padding:16px 20px 30px}
@@ -286,7 +288,7 @@ const STATUSES = [
   {id:"completed",     label:"COMPLETED"},
   {id:"subcontracted", label:"SUBCONTRACTED"},
 ];
-const STATUS_LABELS = {new:"New","in-review":"In-Review",ready:"Ready to Schedule",scheduled:"Scheduled","in-progress":"In-Progress",completed:"Completed",subcontracted:"Subcontracted"};
+const STATUS_LABELS = {new:"New","in-review":"In-Review",ready:"Ready to Schedule",scheduled:"Scheduled","in-progress":"In-Progress",completed:"Completed",subcontracted:"Subcontracted",closed:"Closed & Archived"};
 function statusLabel(id){ return STATUS_LABELS[id] || id || "New"; }
 function normStatus(s){ return {proposed:"ready",countered:"ready",agreed:"scheduled",tracker:"scheduled"}[s] || (STATUS_LABELS[s] ? s : "new"); }
 const INSTALLERS = ["Eli","George","MZ"];
@@ -439,7 +441,7 @@ function cardHTML(r){
     <div class="cust">${esc(r.customer||"")}</div>
     <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">JOB FILES</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
-    ${isEditor() && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
+    ${isEditor() && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}<option value="closed" ${normStatus(r.status)==="closed"?"selected":""}>Closed & Archived</option></select>` : ""}
   </div>`;
 }
 function setTypeFilter(f){ typeFilter = f; renderBoard(); }
@@ -502,13 +504,28 @@ function renderArchive(){
       <div class="muted">Installed ${fmtDate(r.agreed_date)} • ${esc(r.agreed_crew||"")} • ${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}</div></div>
       <button class="small" onclick="openDrawer('${r.id}')">View history</button>
       <button class="small" onclick="unarchive('${r.id}')">Back to board</button>
-    </div>`).join("") : `<div class="empty">Nothing archived yet. Completed installs will live here — they are never deleted.</div>`;
+    </div>`).join("") : `<div class="empty">Nothing archived yet. Completed and closed installs will live here.</div>`;
 }
 
 /* ---------------- Drawer (the documented "meeting") ---------------- */
 function openDrawer(id){ openId = id; editOpen = false; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
 function closeDrawer(){ openId = null; editOpen = false; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
 function toggleEdit(){ editOpen = !editOpen; renderDrawer(); }
+async function deleteRequest(){
+  if(!isEditor()) return;
+  const r = requests.find(x=>x.id===openId); if(!r) return;
+  if(!confirm("Delete " + (r.job_number||"this request") + (r.customer ? " — " + r.customer : "") + " permanently?\n\nThis removes the card and its whole history. This cannot be undone.")) return;
+  if(!SHARED){
+    requests = requests.filter(x=>x.id!==openId);
+    events = events.filter(e=>e.request_id!==openId);
+    saveLocal(); closeDrawer(); render(); toast("Request deleted"); return;
+  }
+  const { error: e1 } = await sb.from("sched_events").delete().eq("request_id", openId);
+  if(e1){ toast("Delete failed: " + e1.message); return; }
+  const { error: e2 } = await sb.from("sched_requests").delete().eq("id", openId);
+  if(e2){ toast("Delete failed: " + e2.message); return; }
+  closeDrawer(); await loadData(); toast("Request deleted");
+}
 function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Job files", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
@@ -519,7 +536,7 @@ function renderDrawer(){
   const isH = isEditor(), isJ = !isH;
   let actions = "";
   if(r.archived){
-    actions = `<div class="actions"><h4>ARCHIVED</h4><div class="muted">This install is complete and archived. It stays here permanently — nothing is deleted.</div>
+    actions = `<div class="actions"><h4>ARCHIVED</h4><div class="muted">This card is in the Archive.</div>
       <div class="row" style="margin-top:10px"><button onclick="unarchive('${r.id}')">Back to board</button></div></div>`;
   } else {
     let inner = "";
@@ -564,7 +581,7 @@ function renderDrawer(){
   document.getElementById("drawer").innerHTML = `
     <div class="dhead"><div><h2>${esc(r.job_number||"—")} — ${esc(r.customer||"")}</h2>
       <div class="sub">${esc(r.address||"")} • ${typeMeta(r.type).label}</div></div>
-      ${isH && !r.archived ? `<button class="editicon" onclick="toggleEdit()" title="Edit details">✎</button>` : ""}
+      ${isH ? `<span style="display:flex;gap:8px">${!r.archived ? `<button class="editicon" onclick="toggleEdit()" title="Edit details">✎</button>` : ""}<button class="editicon del" onclick="deleteRequest()" title="Remove — delete this request">✕</button></span>` : ""}
     </div>
     <div class="dbody">
       <dl class="kv">
@@ -739,7 +756,7 @@ async function startInstall(){
   toast("Marked in-progress");
 }
 async function completeInstall(){
-  const ev = evBase("completed"); ev.body = "Install completed — archived (kept on record, not deleted).";
+  const ev = evBase("completed"); ev.body = "Install completed — moved to the Archive.";
   await addEvent(ev, {archived:true, status:"completed"});
   closeDrawer(); showView("archive");
   toast("Archived — on record in the Archive");
@@ -748,7 +765,7 @@ async function unarchive(id){
   openId = id;
   const r = requests.find(x=>x.id===id);
   const ev = evBase("unarchived"); ev.request_id = id; ev.body = "Sent back to the board.";
-  await addEvent(ev, {archived:false, status: (r && r.agreed_date) ? "scheduled" : "new"});
+  await addEvent(ev, {archived:false, status: (r && r.status==="closed") ? "new" : (r && r.agreed_date) ? "scheduled" : "new"});
   toast("Back on the board");
 }
 
@@ -760,8 +777,8 @@ async function setStatus(id, value){
   const drawerOpen = document.getElementById("drawer").classList.contains("open") && openId===id;
   const prevOpen = openId; openId = id;
   const ev = evBase("status"); ev.request_id = id;
-  ev.body = "Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(value) + ".";
-  await addEvent(ev, {status:value});
+  ev.body = "Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(value) + "." + (value==="closed" ? " Moved to the Archive." : "");
+  await addEvent(ev, value==="closed" ? {status:"closed", archived:true} : {status:value});
   if(!drawerOpen) openId = prevOpen;
   toast("Status set to " + statusLabel(value));
 }
@@ -769,7 +786,7 @@ function quickStatus(id, value){ setStatus(id, value); }
 function editSection(r){
   const st = normStatus(r.status);
   const typeOpts = Object.keys(TYPE_META).map(k=>`<option value="${k}" ${reqType(r)===k?"selected":""}>${TYPE_META[k].label}</option>`).join("");
-  const statusOpts = STATUSES.map(s=>`<option value="${s.id}" ${st===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("");
+  const statusOpts = STATUSES.map(s=>`<option value="${s.id}" ${st===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("") + `<option value="closed" ${st==="closed"?"selected":""}>Closed & Archived</option>`;
   return `<div class="actions"><h4>EDIT DETAILS — HANNAH</h4>
     <label>Status</label><select id="eStatus">${statusOpts}</select>
     <div class="grid2">
@@ -813,6 +830,7 @@ async function saveEdit(){
     notes: document.getElementById("eNotes").value.trim(),
     status: newStatus
   };
+  if(newStatus==="closed") patch.archived = true;
   const ev = evBase("edited");
   ev.body = normStatus(r.status)!==newStatus
     ? "Details edited. Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(newStatus) + "."
