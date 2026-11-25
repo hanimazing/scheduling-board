@@ -250,7 +250,7 @@
     <label class="muted">Scope — what gets installed</label><textarea id="nScope" placeholder="Products, sizes, where they go"></textarea>
     <div class="grid2">
       <div><label class="muted">Est. hours</label><input id="nHours" type="number" step="0.25" min="0" placeholder="1.5"></div>
-      <div><label class="muted">Due date (if any)</label><input id="nDue" type="date"></div>
+      <div><label class="muted">Product due date (if any)</label><input id="nDue" type="date"></div>
     </div>
     <label class="muted">Crew needed</label><input id="nCrew" placeholder="Eli / George / Eli + George / Eli + MZ">
     <label class="muted">Requested by</label><input id="nRequester" placeholder="Rep or contact who sent the request">
@@ -422,9 +422,9 @@ function duePill(r){
   const today = new Date(); today.setHours(0,0,0,0);
   const due = new Date(r.due_date+"T12:00:00");
   const days = Math.round((due-today)/86400000);
-  if(days < 0) return ` <span class="pill due-soon">due ${fmtDate(r.due_date)} — past</span>`;
-  if(days <= 2) return ` <span class="pill due-soon">due ${fmtDate(r.due_date)}</span>`;
-  return ` <span class="pill">due ${fmtDate(r.due_date)}</span>`;
+  if(days < 0) return ` <span class="pill due-soon">product due ${fmtDate(r.due_date)} — past</span>`;
+  if(days <= 2) return ` <span class="pill due-soon">product due ${fmtDate(r.due_date)}</span>`;
+  return ` <span class="pill">product due ${fmtDate(r.due_date)}</span>`;
 }
 function cardHTML(r){
   const lp = lastProposal(r.id);
@@ -437,7 +437,7 @@ function cardHTML(r){
   return `<div class="card ${typeMeta(r.type).card}" onclick="openDrawer('${r.id}')">
     <div class="job">${esc(r.job_number||"—")}</div>
     <div class="cust">${esc(r.customer||"")}</div>
-    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">INSTALL GUIDE</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
+    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">JOB FILES</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
     ${isEditor() && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}</select>` : ""}
   </div>`;
@@ -509,7 +509,7 @@ function renderArchive(){
 function openDrawer(id){ openId = id; editOpen = false; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
 function closeDrawer(){ openId = null; editOpen = false; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
 function toggleEdit(){ editOpen = !editOpen; renderDrawer(); }
-function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Install guide", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
+function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Job files", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
   const evs = reqEvents(r.id);
@@ -572,7 +572,7 @@ function renderDrawer(){
         <dt>SCOPE</dt><dd>${esc(r.scope||"—")}</dd>
         <dt>HOURS</dt><dd>${r.hours!=null&&r.hours!==""?esc(r.hours):"—"}${r.heavy?' &nbsp;<span class="pill heavy">HEAVY LABOR</span>':""}</dd>
         <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"—")}</dd>
-        <dt>DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"—"}</dd>
+        <dt>PRODUCT DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"—"}</dd>
         <dt>REQUESTED BY</dt><dd>${esc(r.requested_by||"—")}</dd>
         <dt>NOTES</dt><dd>${esc(r.notes||"—")}</dd>
         ${r.agreed_date?`<dt>AGREED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
@@ -640,30 +640,30 @@ async function addNote(){
   await addEvent(ev, null);
 }
 
-/* ---------------- Install guide (Google Drive — Work Orders folder) ---------------- */
+/* ---------------- Job files (Google Drive — Job Files folder) ---------------- */
 function guideSection(r){
   let inner = "";
   if(r.guide_url){
-    inner += `<div style="margin-bottom:8px"><b>${esc(r.guide_name||"Install guide")}</b></div>
+    inner += `<div style="margin-bottom:8px"><b>${esc(r.guide_name||"Job file")}</b></div>
       <div class="row">
-        <button class="primary" onclick="window.open('${esc(r.guide_url)}','_blank')">View / print guide</button>
+        <button class="primary" onclick="window.open('${esc(r.guide_url)}','_blank')">View / print</button>
         ${isEditor() ? `<button onclick="toggleGuideEdit()">${guideEditOpen?"Cancel":"Replace link"}</button>
         <button class="red" onclick="removeGuide()">Remove</button>` : ""}
       </div>`;
   } else {
-    inner += `<div class="muted" style="margin-bottom:8px">No install guide attached yet.${isEditor() ? ` Drop the guide PDF in the <b>Work Orders</b> folder in Google Drive with this job number in the file name and it links here automatically — or paste its Drive link below.` : ""}</div>`;
+    inner += `<div class="muted" style="margin-bottom:8px">No job file attached yet.${isEditor() ? ` Drop the job PDF in the <b>Job Files</b> folder in Google Drive with this job number in the file name and it links here automatically — or paste its Drive link below.` : ""}</div>`;
   }
   if(isEditor() && (!r.guide_url || guideEditOpen)){
     inner += `<label>Drive link to the guide PDF</label>
       <input type="text" id="gUrl" placeholder="Paste the Google Drive link">
       <label>File name (optional)</label>
-      <input type="text" id="gName" placeholder="e.g. I-CH-96917 Install Guide.pdf">
+      <input type="text" id="gName" placeholder="e.g. I-CH-96917 Job Files.pdf">
       <div class="row" style="margin-top:8px"><button class="primary" onclick="attachGuide()">Attach guide</button>
-      <button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Work Orders folder</button></div>`;
+      <button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Job Files folder</button></div>`;
   } else {
-    inner += `<div class="row" style="margin-top:8px"><button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Work Orders folder</button></div>`;
+    inner += `<div class="row" style="margin-top:8px"><button onclick="window.open(WORK_ORDERS_FOLDER_URL,'_blank')">Open Job Files folder</button></div>`;
   }
-  return `<div class="actions"><h4>INSTALL GUIDE</h4>${inner}</div>`;
+  return `<div class="actions"><h4>JOB FILES</h4>${inner}</div>`;
 }
 function toggleGuideEdit(){ guideEditOpen = !guideEditOpen; renderDrawer(); }
 async function attachGuide(){
@@ -673,17 +673,17 @@ async function attachGuide(){
   if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid Drive link first"); return; }
   const r = requests.find(x=>x.id===openId);
   const ev = evBase("guide");
-  ev.body = (r && r.guide_url ? "Install guide replaced: " : "Install guide attached: ") + (name || "Install guide");
+  ev.body = (r && r.guide_url ? "Job file replaced: " : "Job file attached: ") + (name || "Job file");
   guideEditOpen = false;
   await addEvent(ev, {guide_url:url, guide_name:name || "Install guide"});
-  toast("Install guide attached");
+  toast("Job file attached");
 }
 async function removeGuide(){
   if(!isEditor()) return;
-  const ev = evBase("guide"); ev.body = "Install guide removed.";
+  const ev = evBase("guide"); ev.body = "Job file removed.";
   guideEditOpen = false;
   await addEvent(ev, {guide_url:null, guide_name:null});
-  toast("Install guide removed");
+  toast("Job file removed");
 }
 
 /* ---------------- CompanyCam project link ---------------- */
@@ -784,7 +784,7 @@ function editSection(r){
     </div>
     <div class="grid2">
       <div><label>Crew needed</label><input type="text" id="eCrew" value="${esc(r.crew_needed||"")}"></div>
-      <div><label>Due date</label><input type="date" id="eDue" value="${r.due_date||""}"></div>
+      <div><label>Product due date</label><input type="date" id="eDue" value="${r.due_date||""}"></div>
     </div>
     <div class="grid2">
       <div><label>Requested by</label><input type="text" id="eRequester" value="${esc(r.requested_by||"")}"></div>
