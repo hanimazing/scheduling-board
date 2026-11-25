@@ -146,6 +146,21 @@
   .roombanner{display:flex;gap:12px;align-items:center;background:#fff;border-bottom:1px solid var(--line);padding:10px 20px}
   .roombanner .rtitle{font-weight:700;color:var(--navy);letter-spacing:.5px;font-size:14.5px}
   .roombanner .rsub{font-size:12px;color:var(--grey)}
+  .psec{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(10,37,64,.07)}
+  .psec h3{margin:0 0 12px;color:var(--navy);font-size:13px;letter-spacing:.6px}
+  .profilewrap{max-width:920px;margin:0 auto}
+  .imggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .imggrid figure{margin:0}
+  .imggrid img{width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+  .imggrid figcaption{font-size:12px;margin-top:5px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .todorow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+  .todotext{flex:1}
+  .todotext.done{text-decoration:line-through;color:var(--grey)}
+  .todoselect{width:auto;padding:4px 8px;font-size:12.5px}
+  .uploadbtn{display:inline-block;background:var(--navy);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13.5px}
+  .pill.doing{background:#FFF3E0;color:#B25E00}
+  .pill.done{background:#E6F4EA;color:#137333}
+  .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 </style>
 </head>
 <body>
@@ -167,9 +182,10 @@
         <div class="rname">Sales Room</div>
         <div class="rdesc">Coming soon.</div>
       </div>
-      <div class="roomcard soon">
+      <div class="roomcard live" onclick="enterPm()">
         <div class="rname">PM Room</div>
-        <div class="rdesc">Coming soon.</div>
+        <div class="rdesc">Project files — images, to-do lists, notes and statuses for the jobs Hannah is managing.</div>
+        <div class="rgo">Enter room →</div>
       </div>
       <div class="roomcard soon">
         <div class="rname">Management Room</div>
@@ -236,6 +252,43 @@
 </main>
 </div><!-- /screenRoom -->
 
+<div id="screenPm" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="goLobby()">← Lobby</button>
+  <div>
+    <div class="rtitle">PM ROOM</div>
+    <div class="rsub">Project files — images, to-dos, notes &amp; statuses</div>
+  </div>
+</div>
+<div class="toolbar">
+  <button class="viewbtn active" id="btnPmBoard" onclick="showPmView('board')">Board</button>
+  <button class="viewbtn" id="btnPmArchive" onclick="showPmView('archive')">Archive</button>
+  <div class="spacer"></div>
+  <button onclick="refreshData()">↻ Refresh</button>
+  <button class="primary" id="btnNewProject" onclick="openNewProject()">+ New project</button>
+</div>
+<main>
+  <div id="viewPmBoard"><div class="board" id="pmBoard"></div></div>
+  <div id="viewPmArchive" class="hidden">
+    <p class="muted" style="margin-top:0">Closed &amp; archived project files live here. Open one to see its images, to-dos and notes.</p>
+    <div id="pmArchiveList"></div>
+  </div>
+</main>
+</div><!-- /screenPm -->
+
+<div id="screenProject" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="backToPm()">← PM Room</button>
+  <div>
+    <div class="rtitle" id="projBannerTitle">PROJECT FILE</div>
+    <div class="rsub" id="projBannerSub"></div>
+  </div>
+</div>
+<main>
+  <div class="profilewrap" id="projectProfile"></div>
+</main>
+</div><!-- /screenProject -->
+
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"></aside>
 
@@ -261,6 +314,23 @@
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="primary" onclick="createRequest()">Add request</button>
       <button onclick="closeNew()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="pmModal">
+  <div class="sheet">
+    <h2>New project file</h2>
+    <div class="hint">Start a project file. Add images, to-dos and notes on its profile page.</div>
+    <div class="formgrid">
+      <div><label>Title</label><input id="pTitle" type="text" placeholder="e.g. Lobby rebrand — Phase 2"></div>
+      <div><label>Customer</label><input id="pCustomer" type="text"></div>
+      <div><label>Job #</label><input id="pJob" type="text" placeholder="I-CH-00000"></div>
+      <div><label>Address</label><input id="pAddress" type="text"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" onclick="pmCreateProject()">Create project file</button>
+      <button onclick="closeNewProject()">Cancel</button>
     </div>
   </div>
 </div>
@@ -298,6 +368,8 @@ let actor = localStorage.getItem("sched_actor") || "Hannah";
 let requests = [], events = [];
 let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
+let pmProjects = [], pmTodos = [], pmNotes = [], pmImages = [];
+let pmView = "board", openProjectId = null, pmEditOpen = false;
 let guideEditOpen = false;
 let ccamEditOpen = false;
 let editOpen = false;
@@ -336,21 +408,27 @@ function seed(){
   events = [];
   saveLocal();
 }
-function saveLocal(){ localStorage.setItem("schedboard_v1", JSON.stringify({requests, events})); }
+function saveLocal(){ localStorage.setItem("schedboard_v1", JSON.stringify({requests, events, pmProjects, pmTodos, pmNotes, pmImages})); }
 function loadLocal(){
   const raw = localStorage.getItem("schedboard_v1");
   if(!raw){ seed(); return; }
-  try{ const d = JSON.parse(raw); requests = d.requests||[]; events = d.events||[]; }
+  try{ const d = JSON.parse(raw); requests = d.requests||[]; events = d.events||[]; pmProjects = d.pmProjects||[]; pmTodos = d.pmTodos||[]; pmNotes = d.pmNotes||[]; pmImages = d.pmImages||[]; }
   catch(e){ seed(); }
 }
 
 /* ---------------- Data layer ---------------- */
 async function loadData(){
-  if(!SHARED){ loadLocal(); render(); return; }
+  if(!SHARED){ loadLocal(); render(); renderPm(); return; }
   const { data: reqs, error: e1 } = await sb.from("sched_requests").select("*").order("created_at",{ascending:true});
   const { data: evs,  error: e2 } = await sb.from("sched_events").select("*").order("created_at",{ascending:true});
   if(e1 || e2){ toast("Could not load from Supabase — check connection."); return; }
-  requests = reqs; events = evs; render();
+  requests = reqs; events = evs;
+  const { data: projs } = await sb.from("pm_projects").select("*").order("created_at",{ascending:true});
+  const { data: tds } = await sb.from("pm_todos").select("*").order("created_at",{ascending:true});
+  const { data: nts } = await sb.from("pm_notes").select("*").order("created_at",{ascending:true});
+  const { data: ims } = await sb.from("pm_images").select("*").order("created_at",{ascending:true});
+  pmProjects = projs||[]; pmTodos = tds||[]; pmNotes = nts||[]; pmImages = ims||[];
+  render(); renderPm(); if(openProjectId) renderProject();
 }
 async function addRequest(r, ev){
   if(!SHARED){ requests.push(r); events.push(ev); saveLocal(); render(); return; }
@@ -401,6 +479,8 @@ function refreshData(){ loadData(); toast("Refreshed"); }
 function showScreen(name){
   document.getElementById("screenLobby").classList.toggle("hidden", name!=="lobby");
   document.getElementById("screenRoom").classList.toggle("hidden", name!=="room");
+  document.getElementById("screenPm").classList.toggle("hidden", name!=="pm");
+  document.getElementById("screenProject").classList.toggle("hidden", name!=="project");
 }
 function enterRoom(){ showScreen("room"); showView("board"); }
 function goLobby(){ closeDrawer(); showScreen("lobby"); }
@@ -860,6 +940,272 @@ async function createRequest(){
   ["nJob","nCustomer","nAddress","nScope","nHours","nDue","nCrew","nRequester","nNotes"].forEach(i=>document.getElementById(i).value="");
   document.getElementById("nHeavy").checked = false;
   toast("Request added to the board");
+}
+
+/* ---------------- PM Room ---------------- */
+const PM_STATUSES = [
+  {id:"new", label:"NEW"},
+  {id:"in-review", label:"IN-REVIEW"},
+  {id:"active", label:"ACTIVE"},
+  {id:"waiting", label:"WAITING"},
+  {id:"completed", label:"COMPLETED"},
+];
+const PM_STATUS_LABELS = {new:"New","in-review":"In-Review",active:"Active",waiting:"Waiting",completed:"Completed",closed:"Closed & Archived"};
+function pmStatusLabel(id){ return PM_STATUS_LABELS[id] || id || "New"; }
+function pmNormStatus(s){ return PM_STATUS_LABELS[s] ? s : "new"; }
+const TODO_LABELS = {todo:"To Do", doing:"Doing", done:"Done"};
+
+function enterPm(){ showScreen("pm"); showPmView(pmView); }
+function backToPm(){ openProjectId = null; pmEditOpen = false; showScreen("pm"); renderPm(); }
+function showPmView(v){
+  pmView = v;
+  document.getElementById("btnPmBoard").classList.toggle("active", v==="board");
+  document.getElementById("btnPmArchive").classList.toggle("active", v==="archive");
+  document.getElementById("viewPmBoard").classList.toggle("hidden", v!=="board");
+  document.getElementById("viewPmArchive").classList.toggle("hidden", v!=="archive");
+  renderPm();
+}
+function pmCounts(pid){
+  const t = pmTodos.filter(x=>x.project_id===pid);
+  return { open: t.filter(x=>x.status!=="done").length, total: t.length,
+           imgs: pmImages.filter(x=>x.project_id===pid).length,
+           notes: pmNotes.filter(x=>x.project_id===pid).length };
+}
+function renderPm(){
+  const board = document.getElementById("pmBoard"); if(!board) return;
+  board.innerHTML = PM_STATUSES.map(s=>{
+    const items = pmProjects.filter(p=>!p.archived && pmNormStatus(p.status)===s.id);
+    return `<div class="col"><h3>${s.label} <span class="count">${items.length}</span></h3>` +
+      (items.map(pmCardHTML).join("") || `<div class="empty">No projects</div>`) + `</div>`;
+  }).join("");
+  const arch = pmProjects.filter(p=>p.archived).sort((a,b)=>(a.updated_at||"")<(b.updated_at||"")?1:-1);
+  document.getElementById("pmArchiveList").innerHTML = arch.length ? arch.map(p=>`
+    <div class="archrow">
+      <div class="grow"><span class="job">${esc(p.title||"Untitled project")}</span> — ${esc(p.customer||"")}
+      <div class="muted">${esc(p.job_number||"")} • ${pmStatusLabel(pmNormStatus(p.status))}</div></div>
+      <button class="small" onclick="openProject('${p.id}')">Open file</button>
+      ${isEditor() ? `<button class="small" onclick="pmUnarchive('${p.id}')">Back to board</button>` : ""}
+    </div>`).join("") : `<div class="empty">Nothing archived yet. Closed project files will live here.</div>`;
+  const nb = document.getElementById("btnNewProject");
+  if(nb) nb.style.display = isEditor() ? "" : "none";
+}
+function pmCardHTML(p){
+  const c = pmCounts(p.id);
+  return `<div class="card" onclick="openProject('${p.id}')">
+    <div class="job">${esc(p.title||"Untitled project")}</div>
+    <div class="cust">${esc(p.customer||"")}${p.job_number ? " • " + esc(p.job_number) : ""}</div>
+    <div class="meta">${c.total ? `<span class="pill">${c.open} open to-do${c.open===1?"":"s"}</span> ` : ""}${c.imgs ? `<span class="pill">${c.imgs} image${c.imgs===1?"":"s"}</span> ` : ""}${c.notes ? `<span class="pill">${c.notes} note${c.notes===1?"":"s"}</span>` : ""}</div>
+    ${isEditor() && !p.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="pmSetStatus('${p.id}', this.value)">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(p.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}<option value="closed">Closed &amp; Archived</option></select>` : ""}
+  </div>`;
+}
+async function pmAfter(){
+  if(SHARED){ await loadData(); return; }
+  saveLocal(); renderPm(); if(openProjectId) renderProject();
+}
+async function pmPatch(id, patch){
+  patch.updated_at = nowISO();
+  if(!SHARED){ const p = pmProjects.find(x=>x.id===id); if(p) Object.assign(p, patch); await pmAfter(); return; }
+  const { error } = await sb.from("pm_projects").update(patch).eq("id", id);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmSetStatus(id, value){
+  if(!isEditor()) return;
+  if(value==="closed") await pmPatch(id, {status:"closed", archived:true});
+  else await pmPatch(id, {status:value});
+  toast("Status: " + pmStatusLabel(value));
+}
+async function pmUnarchive(id){ if(!isEditor()) return; await pmPatch(id, {archived:false, status:"new"}); }
+
+function openNewProject(){ document.getElementById("pmModal").classList.add("open"); }
+function closeNewProject(){ document.getElementById("pmModal").classList.remove("open"); }
+async function pmCreateProject(){
+  if(!isEditor()) return;
+  const title = document.getElementById("pTitle").value.trim();
+  const customer = document.getElementById("pCustomer").value.trim();
+  if(!title && !customer){ toast("Give the project a title or a customer"); return; }
+  const row = { id: uid(), title, customer,
+    job_number: document.getElementById("pJob").value.trim(),
+    address: document.getElementById("pAddress").value.trim(),
+    status: "new", archived: false, created_at: nowISO(), updated_at: nowISO() };
+  if(!SHARED){ pmProjects.push(row); }
+  else { const { error } = await sb.from("pm_projects").insert(row); if(error){ toast("Save failed: " + error.message); return; } }
+  ["pTitle","pCustomer","pJob","pAddress"].forEach(i=>document.getElementById(i).value="");
+  closeNewProject(); await pmAfter(); openProject(row.id);
+}
+
+/* ---------------- Project profile page ---------------- */
+function openProject(id){ openProjectId = id; pmEditOpen = false; showScreen("project"); renderProject(); }
+function fmtDT(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " " + d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+}
+function renderProject(){
+  const wrap = document.getElementById("projectProfile"); if(!wrap) return;
+  const p = pmProjects.find(x=>x.id===openProjectId);
+  if(!p){ wrap.innerHTML = `<div class="empty">Project not found.</div>`; return; }
+  document.getElementById("projBannerSub").textContent = (p.customer||"") + (p.job_number ? " • " + p.job_number : "");
+  const ed = isEditor();
+  const todos = pmTodos.filter(x=>x.project_id===p.id);
+  const notes = pmNotes.filter(x=>x.project_id===p.id);
+  const imgs = pmImages.filter(x=>x.project_id===p.id);
+  wrap.innerHTML = `
+  <div class="psec">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div>
+        <h2 style="margin:0;color:var(--navy)">${esc(p.title||"Untitled project")}</h2>
+        <div class="muted" style="margin-top:4px">${esc(p.customer||"")}${p.job_number ? " • " + esc(p.job_number) : ""}${p.address ? "<br>" + esc(p.address) : ""}</div>
+        <div style="margin-top:8px"><span class="pill">${pmStatusLabel(pmNormStatus(p.status))}</span>${p.archived ? ` <span class="pill due-soon">ARCHIVED</span>` : ""}</div>
+      </div>
+      ${ed ? `<span style="display:flex;gap:8px">${!p.archived ? `<button class="editicon" onclick="togglePmEdit()" title="Edit project">✎</button>` : ""}<button class="editicon del" onclick="pmDeleteProject()" title="Remove — delete this project">✕</button></span>` : ""}
+    </div>
+    ${p.archived ? `<div class="row" style="margin-top:12px">${ed ? `<button onclick="pmUnarchive('${p.id}')">Back to board</button>` : ""}</div>` : ""}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:12px;align-items:center"><label style="margin:0">Status</label>
+      <select onchange="pmSetStatus('${p.id}', this.value)" style="max-width:240px">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(p.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}<option value="closed">Closed &amp; Archived</option></select></div>` : ""}
+    ${ed && pmEditOpen && !p.archived ? pmEditForm(p) : ""}
+  </div>
+  <div class="psec">
+    <h3>IMAGES</h3>
+    ${imgs.length ? `<div class="imggrid">${imgs.map(im=>`<figure>
+      <a href="${esc(im.url)}" target="_blank" rel="noopener"><img src="${esc(im.url)}" alt="${esc(im.name||"project image")}"></a>
+      <figcaption class="muted"><span>${esc(im.name||"")}</span>${ed ? `<button class="small" style="color:#B3261E" onclick="pmDeleteImage('${im.id}')">Remove</button>` : ""}</figcaption>
+    </figure>`).join("")}</div>` : `<div class="muted">No images yet.</div>`}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><label class="uploadbtn">+ Upload images<input type="file" accept="image/*" multiple style="display:none" onchange="pmAddImageFiles(this)"></label></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="pmImgUrl" placeholder="…or paste an image link"><input type="text" id="pmImgName" placeholder="Caption (optional)" style="max-width:180px"><button onclick="pmAddImageUrl()">Add link</button></div>` : ""}
+  </div>
+  <div class="psec">
+    <h3>TO-DO LIST</h3>
+    ${todos.length ? todos.map(t=>`<div class="todorow">
+      ${ed && !p.archived ? `<select class="todoselect" onchange="pmSetTodoStatus('${t.id}', this.value)"><option value="todo" ${t.status==="todo"?"selected":""}>To Do</option><option value="doing" ${t.status==="doing"?"selected":""}>Doing</option><option value="done" ${t.status==="done"?"selected":""}>Done</option></select>` : `<span class="pill ${t.status}">${TODO_LABELS[t.status]||"To Do"}</span>`}
+      <span class="todotext ${t.status==="done"?"done":""}">${esc(t.text)}</span>
+      ${ed && !p.archived ? `<button class="small" style="color:#B3261E" onclick="pmDeleteTodo('${t.id}')">✕</button>` : ""}
+    </div>`).join("") : `<div class="muted">Nothing on the list yet.</div>`}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:10px"><input type="text" id="pmTodoText" placeholder="Add a to-do…"><button class="primary" onclick="pmAddTodo()">Add</button></div>` : ""}
+  </div>
+  <div class="psec">
+    <h3>NOTES</h3>
+    <div class="thread">${notes.length ? notes.map(n=>`<div class="event comment">
+      <span class="who ${n.actor==="Hannah"?"hannah":(n.actor==="Jordan"||n.actor==="Hannah (personal)")?"jordan":"system"}">${esc(n.actor)}</span>
+      <span class="when">${fmtDT(n.created_at)}</span>
+      <div class="body">${esc(n.body)}</div>
+    </div>`).join("") : `<div class="muted">No notes yet.</div>`}</div>
+    ${!p.archived ? `<label>Note for the record</label>
+    <textarea id="pmNoteText" placeholder="Add a note to this project file"></textarea>
+    <div class="row" style="margin-top:8px"><button onclick="pmAddNote()">Add note</button></div>` : ""}
+  </div>`;
+}
+function togglePmEdit(){ pmEditOpen = !pmEditOpen; renderProject(); }
+function pmEditForm(p){
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+    <div class="formgrid">
+      <div><label>Title</label><input type="text" id="peTitle" value="${esc(p.title||"")}"></div>
+      <div><label>Customer</label><input type="text" id="peCustomer" value="${esc(p.customer||"")}"></div>
+      <div><label>Job #</label><input type="text" id="peJob" value="${esc(p.job_number||"")}"></div>
+      <div><label>Address</label><input type="text" id="peAddress" value="${esc(p.address||"")}"></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="primary" onclick="pmSaveEdit()">Save changes</button><button onclick="togglePmEdit()">Cancel</button></div>
+  </div>`;
+}
+async function pmSaveEdit(){
+  if(!isEditor()) return;
+  const p = pmProjects.find(x=>x.id===openProjectId); if(!p) return;
+  const patch = { title: document.getElementById("peTitle").value.trim(),
+    customer: document.getElementById("peCustomer").value.trim(),
+    job_number: document.getElementById("peJob").value.trim(),
+    address: document.getElementById("peAddress").value.trim() };
+  pmEditOpen = false;
+  await pmPatch(p.id, patch);
+  toast("Project saved");
+}
+async function pmDeleteProject(){
+  if(!isEditor()) return;
+  const p = pmProjects.find(x=>x.id===openProjectId); if(!p) return;
+  if(!confirm("Delete " + (p.title||"this project") + " permanently?\n\nThis removes the project file with its images, to-dos and notes. This cannot be undone.")) return;
+  if(!SHARED){
+    pmProjects = pmProjects.filter(x=>x.id!==p.id);
+    pmTodos = pmTodos.filter(x=>x.project_id!==p.id);
+    pmNotes = pmNotes.filter(x=>x.project_id!==p.id);
+    pmImages = pmImages.filter(x=>x.project_id!==p.id);
+    openProjectId = null; saveLocal(); backToPm(); toast("Project deleted"); return;
+  }
+  const imgs = pmImages.filter(x=>x.project_id===p.id && x.path);
+  if(imgs.length){ try{ await sb.storage.from("pm-images").remove(imgs.map(x=>x.path)); }catch(e){} }
+  const { error } = await sb.from("pm_projects").delete().eq("id", p.id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  openProjectId = null; await loadData(); backToPm(); toast("Project deleted");
+}
+async function pmAddTodo(){
+  if(!isEditor()) return;
+  const inp = document.getElementById("pmTodoText");
+  const text = inp.value.trim(); if(!text) return;
+  const row = { id: uid(), project_id: openProjectId, text, status: "todo", created_by: actor, created_at: nowISO() };
+  if(!SHARED){ pmTodos.push(row); await pmAfter(); return; }
+  const { error } = await sb.from("pm_todos").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmSetTodoStatus(id, status){
+  if(!isEditor()) return;
+  if(!SHARED){ const t = pmTodos.find(x=>x.id===id); if(t) t.status = status; await pmAfter(); return; }
+  const { error } = await sb.from("pm_todos").update({status}).eq("id", id);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmDeleteTodo(id){
+  if(!isEditor()) return;
+  if(!SHARED){ pmTodos = pmTodos.filter(x=>x.id!==id); await pmAfter(); return; }
+  const { error } = await sb.from("pm_todos").delete().eq("id", id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmAddNote(){
+  const inp = document.getElementById("pmNoteText");
+  const body = inp.value.trim(); if(!body) return;
+  const row = { id: uid(), project_id: openProjectId, actor, body, created_at: nowISO() };
+  if(!SHARED){ pmNotes.push(row); await pmAfter(); return; }
+  const { error } = await sb.from("pm_notes").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmAddImageFiles(inp){
+  if(!isEditor()) return;
+  const files = Array.from(inp.files||[]); if(!files.length) return;
+  if(!SHARED){
+    for(const f of files){
+      const url = await new Promise(res=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.readAsDataURL(f); });
+      pmImages.push({ id: uid(), project_id: openProjectId, url, path: "", name: f.name, created_by: actor, created_at: nowISO() });
+    }
+    inp.value = ""; await pmAfter(); return;
+  }
+  for(const f of files){
+    const path = openProjectId + "/" + Date.now() + "_" + f.name.replace(/[^\w.\-]+/g,"_");
+    const { error } = await sb.storage.from("pm-images").upload(path, f);
+    if(error){ toast("Upload failed: " + error.message); continue; }
+    const url = sb.storage.from("pm-images").getPublicUrl(path).data.publicUrl;
+    const { error: e2 } = await sb.from("pm_images").insert({ id: uid(), project_id: openProjectId, url, path, name: f.name, created_by: actor, created_at: nowISO() });
+    if(e2) toast("Save failed: " + e2.message);
+  }
+  inp.value = ""; await pmAfter();
+}
+async function pmAddImageUrl(){
+  if(!isEditor()) return;
+  const url = document.getElementById("pmImgUrl").value.trim(); if(!url) return;
+  const name = document.getElementById("pmImgName").value.trim();
+  const row = { id: uid(), project_id: openProjectId, url, path: "", name, created_by: actor, created_at: nowISO() };
+  if(!SHARED){ pmImages.push(row); await pmAfter(); return; }
+  const { error } = await sb.from("pm_images").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmAfter();
+}
+async function pmDeleteImage(id){
+  if(!isEditor()) return;
+  const im = pmImages.find(x=>x.id===id); if(!im) return;
+  if(!SHARED){ pmImages = pmImages.filter(x=>x.id!==id); await pmAfter(); return; }
+  if(im.path){ try{ await sb.storage.from("pm-images").remove([im.path]); }catch(e){} }
+  const { error } = await sb.from("pm_images").delete().eq("id", id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  await pmAfter();
 }
 
 /* ---------------- Actor / auth ---------------- */
