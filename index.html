@@ -162,6 +162,28 @@
   .drawercover{width:100%;height:180px;object-fit:cover;border-radius:8px;display:block;margin-bottom:12px}
   .coverprev{width:100%;max-height:160px;object-fit:cover;border-radius:8px;display:block;margin:6px 0}
   .projcover{width:100%;height:220px;object-fit:cover;border-radius:10px;display:block;margin-bottom:14px}
+  .statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
+  .stat .n{font-size:24px;font-weight:700;color:var(--navy)}
+  .stat .l{font-size:11px;letter-spacing:.6px;color:var(--grey);margin-top:2px}
+  .hubgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .barrow{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px}
+  .barrow .bl{width:120px;flex:none;color:var(--navy);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barrow .bt{flex:1;background:#EEF1F6;border-radius:6px;height:16px;overflow:hidden}
+  .barrow .bf{display:block;height:100%;background:var(--navy);border-radius:6px}
+  .barrow .bv{width:76px;flex:none;text-align:right;color:var(--grey)}
+  .filebox{height:120px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#F6F7FA;text-decoration:none;padding:8px;text-align:center}
+  .filebox .ext{font-weight:800;letter-spacing:1px;color:var(--navy);border:2px solid var(--navy);border-radius:6px;padding:3px 8px;font-size:13px}
+  .filebox .fn{font-size:11px;color:var(--grey);word-break:break-all}
+  .coverfile{width:100%;height:110px;border-radius:7px;margin-bottom:8px;background:#20293A;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-decoration:none;padding:8px;text-align:center;box-sizing:border-box}
+  .coverfile .ext{font-weight:800;letter-spacing:1px;border:2px solid #fff;border-radius:6px;padding:2px 8px;font-size:13px}
+  .coverfile .fn{font-size:11px;opacity:.85;word-break:break-all}
+  .projcoverfile{width:100%;height:120px;border-radius:10px;margin-bottom:14px;background:#20293A;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-decoration:none;box-sizing:border-box}
+  .projcoverfile .ext{font-weight:800;letter-spacing:1px;border:2px solid #fff;border-radius:6px;padding:3px 10px;font-size:15px}
+  .projcoverfile .fn{font-size:12px;opacity:.85;word-break:break-all}
+  .duerow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+  .duerow:last-child{border-bottom:none}
+
   .locgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
   .loccard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;background:#FBFCFE}
   .loccard:hover{border-color:var(--navy)}
@@ -267,18 +289,20 @@
   <button class="small" onclick="goLobby()">← Lobby</button>
   <div>
     <div class="rtitle">PROJECT MANAGEMENT</div>
-    <div class="rsub">Project files — images, to-dos, notes &amp; statuses</div>
+    <div class="rsub">Hub, active projects, files &amp; CoreBridge orders</div>
   </div>
 </div>
 <div class="toolbar">
-  <button class="viewbtn active" id="btnPmBoard" onclick="showPmView('board')">Board</button>
+  <button class="viewbtn active" id="btnPmHub" onclick="showPmView('hub')">Hub</button>
+  <button class="viewbtn" id="btnPmBoard" onclick="showPmView('board')">Active Projects</button>
   <button class="viewbtn" id="btnPmArchive" onclick="showPmView('archive')">Archive</button>
   <div class="spacer"></div>
   <button onclick="refreshData()">↻ Refresh</button>
   <button class="primary" id="btnNewProject" onclick="openNewProject()">+ New project</button>
 </div>
 <main>
-  <div id="viewPmBoard"><div class="board" id="pmBoard"></div></div>
+  <div id="viewPmHub"><div id="pmHub"></div></div>
+  <div id="viewPmBoard" class="hidden"><div class="board" id="pmBoard"></div></div>
   <div id="viewPmArchive" class="hidden">
     <p class="muted" style="margin-top:0">Closed &amp; archived project files live here. Open one to see its images, to-dos and notes.</p>
     <div id="pmArchiveList"></div>
@@ -314,7 +338,7 @@
 
 <div id="screenOrder" class="hidden">
 <div class="roombanner">
-  <button class="small" onclick="backToLocation()">← Location</button>
+  <button class="small" id="ordBackBtn" onclick="backFromOrder()">← Back</button>
   <div>
     <div class="rtitle" id="ordBannerTitle">ORDER</div>
     <div class="rsub" id="ordBannerSub"></div>
@@ -404,7 +428,7 @@ let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
 let pmProjects = [], pmTodos = [], pmNotes = [], pmImages = [];
 let pmLocations = [], pmOrders = [];
-let pmView = "board", openProjectId = null, pmEditOpen = false;
+let pmView = "hub", openProjectId = null, pmEditOpen = false;
 let openLocationId = null, openOrderId = null, pmLocEditOpen = false, pmOrdEditOpen = false;
 let guideEditOpen = false;
 let ccamEditOpen = false;
@@ -527,6 +551,7 @@ async function ensurePmProject(r){
     await sb.from("pm_notes").insert(note);
     pmProjects.push(proj); pmNotes.push(note);
   }
+  await ensureProjectOrder(proj);
   await updateRequest(r.id, {pm_project_id: proj.id});
   toast("Project created in Project Management");
 }
@@ -1071,7 +1096,7 @@ async function coverRemove(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
   if(SHARED && r.cover_path){ try{ await sb.storage.from("cover-photos").remove([r.cover_path]); }catch(e){} }
   await patchRequest(openId, {cover_url: "", cover_path: ""});
-  toast("Cover photo removed");
+  toast("Cover removed");
 }
 
 /* ---------------- Project Management ---------------- */
@@ -1091,8 +1116,10 @@ function enterPm(){ showScreen("pm"); showPmView(pmView); }
 function backToPm(){ openProjectId = null; openLocationId = null; openOrderId = null; pmEditOpen = false; showScreen("pm"); renderPm(); }
 function showPmView(v){
   pmView = v;
+  document.getElementById("btnPmHub").classList.toggle("active", v==="hub");
   document.getElementById("btnPmBoard").classList.toggle("active", v==="board");
   document.getElementById("btnPmArchive").classList.toggle("active", v==="archive");
+  document.getElementById("viewPmHub").classList.toggle("hidden", v!=="hub");
   document.getElementById("viewPmBoard").classList.toggle("hidden", v!=="board");
   document.getElementById("viewPmArchive").classList.toggle("hidden", v!=="archive");
   renderPm();
@@ -1121,14 +1148,15 @@ function renderPm(){
     </div>`).join("") : `<div class="empty">Nothing archived yet. Closed project files will live here.</div>`;
   const nb = document.getElementById("btnNewProject");
   if(nb) nb.style.display = isEditor() ? "" : "none";
+  renderPmHub();
 }
 function pmCardHTML(p){
   const c = pmCounts(p.id);
   return `<div class="card" onclick="openProject('${p.id}')">
-    ${p.cover_url ? `<img class="coverimg" src="${esc(p.cover_url)}" alt="">` : ""}
+    ${pmCoverHTML(p, "coverimg")}
     <div class="job">${esc(p.title||"Untitled project")}</div>
     <div class="cust">${esc(p.customer||"")}${p.job_number ? " • " + esc(p.job_number) : ""}</div>
-    <div class="meta">${c.locs ? `<span class="pill">${c.locs} location${c.locs===1?"":"s"}</span> ` : ""}${c.total ? `<span class="pill">${c.open} open to-do${c.open===1?"":"s"}</span> ` : ""}${c.imgs ? `<span class="pill">${c.imgs} image${c.imgs===1?"":"s"}</span> ` : ""}${c.notes ? `<span class="pill">${c.notes} note${c.notes===1?"":"s"}</span>` : ""}</div>
+    <div class="meta">${c.locs ? `<span class="pill">${c.locs} location${c.locs===1?"":"s"}</span> ` : ""}${c.total ? `<span class="pill">${c.open} open to-do${c.open===1?"":"s"}</span> ` : ""}${c.imgs ? `<span class="pill">${c.imgs} file${c.imgs===1?"":"s"}</span> ` : ""}${c.notes ? `<span class="pill">${c.notes} note${c.notes===1?"":"s"}</span>` : ""}</div>
     ${isEditor() && !p.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="pmSetStatus('${p.id}', this.value)">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(p.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}<option value="closed">Closed &amp; Archived</option></select>` : ""}
   </div>`;
 }
@@ -1165,7 +1193,130 @@ async function pmCreateProject(){
   if(!SHARED){ pmProjects.push(row); }
   else { const { error } = await sb.from("pm_projects").insert(row); if(error){ toast("Save failed: " + error.message); return; } }
   ["pTitle","pCustomer","pJob","pAddress"].forEach(i=>document.getElementById(i).value="");
-  closeNewProject(); await pmAfter(); openProject(row.id);
+  closeNewProject(); await ensureProjectOrder(row); await pmAfter(); openProject(row.id);
+}
+
+
+/* ---------------- PM Hub ---------------- */
+function fileKind(name, url){
+  const s = ((name||"") + " " + (url||"")).toLowerCase();
+  if(/\.(jpe?g|png|gif|webp|avif|bmp|svg)(\?|#|$)/.test(s)) return "image";
+  if(/\.pdf(\?|#|$)/.test(s)) return "pdf";
+  return "file";
+}
+function fileExt(name, url){
+  const m = ((name||"") || (url||"")).match(/\.([a-z0-9]{2,5})(?:[?#]|$)/i);
+  return m ? m[1].toUpperCase() : "FILE";
+}
+function pmCoverHTML(p, cls){
+  if(!p.cover_url) return "";
+  const nm = (p.cover_path||"").split("/").pop() || "Cover file";
+  if(fileKind(nm, p.cover_url)==="image") return `<img class="${cls}" src="${esc(p.cover_url)}" alt="">`;
+  const wrap = cls==="projcover" ? "projcoverfile" : "coverfile";
+  return `<a class="${wrap}" href="${esc(p.cover_url)}" target="_blank" rel="noopener"><span class="ext">${fileExt(nm, p.cover_url)}</span><span class="fn">${esc(nm)}</span></a>`;
+}
+function pmFileHTML(im, ed){
+  const kind = fileKind(im.name, im.url);
+  const inner = kind==="image"
+    ? `<a href="${esc(im.url)}" target="_blank" rel="noopener"><img src="${esc(im.url)}" alt="${esc(im.name||"project file")}"></a>`
+    : `<a class="filebox" href="${esc(im.url)}" target="_blank" rel="noopener"><span class="ext">${fileExt(im.name, im.url)}</span><span class="fn">${esc(im.name||"Open file")}</span></a>`;
+  return `<figure>${inner}<figcaption class="muted"><span>${esc(im.name||"")}</span>${ed ? `<button class="small" style="color:#B3261E" onclick="pmDeleteImage('${im.id}')">Remove</button>` : ""}</figcaption></figure>`;
+}
+function pmOrderCardHTML(o){
+  return `<div class="loccard" onclick="openOrder('${o.id}')">
+      <div class="lname">${esc(o.order_number||"Order")}</div>
+      ${o.title ? `<div class="muted">${esc(o.title)}</div>` : ""}
+      <div class="meta" style="margin-top:6px">${o.cb_status ? `<span class="pill">${esc(o.cb_status)}</span> ` : ""}${o.tracker_status ? `<span class="pill">Tracker: ${esc(o.tracker_status)}</span> ` : ""}${o.due_date ? `<span class="pill">Due ${fmtDate(o.due_date)}</span> ` : ""}${(o.total!==null && o.total!==undefined && o.total!=="") ? `<span class="pill">${fmtMoney(o.total)}</span>` : ""}${o.jobfiles_url ? `<span class="pill">WO + proofs ✓</span>` : `<span class="pill">WO pending</span>`}</div>
+    </div>`;
+}
+function renderPmHub(){
+  const el = document.getElementById("pmHub"); if(!el) return;
+  const act = pmProjects.filter(p=>!p.archived);
+  const activeCount = act.filter(p=>!["completed","closed"].includes(pmNormStatus(p.status))).length;
+  const openTodos = pmTodos.filter(t=>t.status!=="done").length;
+  const totalVal = pmOrders.reduce((s,o)=>s+(Number(o.total)||0),0);
+  const totalBal = pmOrders.reduce((s,o)=>s+(Number(o.balance)||0),0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const soon = pmOrders.filter(o=>o.due_date).map(o=>({o, d:new Date(String(o.due_date).slice(0,10)+"T12:00:00")}))
+    .filter(x=>!isNaN(x.d) && x.d.getTime() >= today.getTime()-86400000 && x.d.getTime() <= today.getTime()+21*86400000)
+    .sort((a,b)=>a.d-b.d);
+  const statusRows = PM_STATUSES.concat([{id:"closed", label:"CLOSED & ARCHIVED"}]).map(s=>({
+    label: s.label, n: s.id==="closed" ? pmProjects.filter(p=>p.archived).length : act.filter(p=>pmNormStatus(p.status)===s.id).length }));
+  const maxS = Math.max(1, ...statusRows.map(r=>r.n));
+  const byProj = {};
+  pmOrders.forEach(o=>{ const v = Number(o.total)||0; if(v) byProj[o.project_id] = (byProj[o.project_id]||0) + v; });
+  const projRows = Object.entries(byProj).map(([pid,v])=>{ const p = pmProjects.find(x=>x.id===pid); return { label: p ? (p.title||p.customer||"Project") : "Project", v }; }).sort((a,b)=>b.v-a.v).slice(0,8);
+  const maxV = Math.max(1, ...projRows.map(r=>r.v));
+  const recent = [...pmNotes].sort((a,b)=>(a.created_at<b.created_at?1:-1)).slice(0,5);
+  el.innerHTML = `
+  <div class="statgrid">
+    <div class="stat"><div class="n">${activeCount}</div><div class="l">ACTIVE PROJECTS</div></div>
+    <div class="stat"><div class="n">${pmOrders.length}</div><div class="l">COREBRIDGE ORDERS TRACKED</div></div>
+    <div class="stat"><div class="n">${fmtMoney(totalVal)}</div><div class="l">TOTAL ORDER VALUE</div></div>
+    <div class="stat"><div class="n">${fmtMoney(totalBal)}</div><div class="l">BALANCES OUTSTANDING</div></div>
+    <div class="stat"><div class="n">${openTodos}</div><div class="l">OPEN TO-DOS</div></div>
+    <div class="stat"><div class="n">${pmImages.length}</div><div class="l">FILES & PHOTOS</div></div>
+  </div>
+  <div class="psec" style="cursor:pointer" onclick="showPmView('board')">
+    <h3 style="margin-bottom:4px">ACTIVE PROJECTS →</h3>
+    <div class="muted">The project database — every project file with its locations, CoreBridge orders, work orders & proofs, files, to-dos and notes. ${act.length} project${act.length===1?"":"s"} on the board.</div>
+  </div>
+  <div class="hubgrid">
+    <div class="psec">
+      <h3>PROJECTS BY STATUS</h3>
+      ${statusRows.map(r=>`<div class="barrow"><span class="bl">${r.label}</span><span class="bt"><span class="bf" style="width:${Math.round(r.n/maxS*100)}%"></span></span><span class="bv">${r.n}</span></div>`).join("")}
+    </div>
+    <div class="psec">
+      <h3>ORDER VALUE BY PROJECT</h3>
+      ${projRows.length ? projRows.map(r=>`<div class="barrow"><span class="bl">${esc(r.label)}</span><span class="bt"><span class="bf" style="width:${Math.round(r.v/maxV*100)}%"></span></span><span class="bv">${fmtMoney(r.v)}</span></div>`).join("") : `<div class="muted">No order values yet — the CoreBridge scans fill these in.</div>`}
+    </div>
+  </div>
+  <div class="hubgrid" style="margin-top:14px">
+    <div class="psec">
+      <h3>DUE IN THE NEXT 3 WEEKS</h3>
+      ${soon.length ? soon.map(x=>{ const p = pmProjects.find(pp=>pp.id===x.o.project_id); const l = pmLocations.find(ll=>ll.id===x.o.location_id); return `<div class="duerow" onclick="openOrder('${x.o.id}')"><span><b>${esc(x.o.order_number||"Order")}</b> — ${esc(p ? (p.title||"") : "")}${l ? " • " + esc(l.name||"") : ""}</span><span class="pill">${fmtDate(x.o.due_date)}</span></div>`; }).join("") : `<div class="muted">Nothing due in the next 3 weeks.</div>`}
+    </div>
+    <div class="psec">
+      <h3>RECENT NOTES</h3>
+      ${recent.length ? recent.map(n=>{ const p = pmProjects.find(pp=>pp.id===n.project_id); return `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="who ${n.actor==="Hannah"?"hannah":(n.actor==="Jordan"||n.actor==="Hannah (personal)")?"jordan":"system"}">${esc(n.actor)}</span> <span class="when">${fmtDT(n.created_at)}</span> <span class="muted">on ${esc(p ? (p.title||"project") : "project")}</span><div style="font-size:13px;margin-top:2px">${esc((n.body||"").slice(0,140))}${(n.body||"").length>140?"…":""}</div></div>`; }).join("") : `<div class="muted">No notes yet.</div>`}
+    </div>
+  </div>`;
+}
+const pmEnsuring = new Set();
+async function ensureProjectOrder(p){
+  if(!p || p.archived || !isEditor() || pmEnsuring.has(p.id)) return;
+  const jn = (p.job_number||"").trim(); if(!jn) return;
+  if(pmOrders.some(o=>o.project_id===p.id)) return;
+  pmEnsuring.add(p.id);
+  const row = { id: uid(), location_id: null, project_id: p.id, order_number: jn, title: "",
+    cb_status: "", tracker_status: "", due_date: null, total: null, balance: null,
+    companycam_url: p.companycam_url||"", jobfiles_url: "", products: [], sources: {}, last_synced_at: null,
+    created_at: nowISO(), updated_at: nowISO() };
+  if(!SHARED){ pmOrders.push(row); pmEnsuring.delete(p.id); return; }
+  const { error } = await sb.from("pm_orders").insert(row);
+  pmEnsuring.delete(p.id);
+  if(!error) pmOrders.push(row);
+}
+async function pmAddProjectOrder(){
+  if(!isEditor()) return;
+  const num = document.getElementById("pmProjOrdNum").value.trim();
+  if(!num){ toast("Enter the CoreBridge order number"); return; }
+  const row = { id: uid(), location_id: null, project_id: openProjectId,
+    order_number: num, title: document.getElementById("pmProjOrdTitle").value.trim(),
+    cb_status: "", tracker_status: "", due_date: null, total: null, balance: null,
+    companycam_url: "", jobfiles_url: "", products: [], sources: {}, last_synced_at: null,
+    created_at: nowISO(), updated_at: nowISO() };
+  if(!SHARED){ pmOrders.push(row); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_orders").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+  toast("Order added — the scans will fill in its page");
+}
+function backFromOrder(){
+  const o = pmOrders.find(x=>x.id===openOrderId);
+  openOrderId = null;
+  if(o && o.location_id){ showScreen("location"); renderLocation(); }
+  else { showScreen("project"); renderProject(); }
 }
 
 /* ---------------- Project profile page ---------------- */
@@ -1181,13 +1332,15 @@ function renderProject(){
   if(!p){ wrap.innerHTML = `<div class="empty">Project not found.</div>`; return; }
   document.getElementById("projBannerSub").textContent = (p.customer||"") + (p.job_number ? " • " + p.job_number : "");
   const ed = isEditor();
+  if(ed) ensureProjectOrder(p);
   const todos = pmTodos.filter(x=>x.project_id===p.id && !x.location_id);
   const notes = pmNotes.filter(x=>x.project_id===p.id && !x.location_id);
   const imgs = pmImages.filter(x=>x.project_id===p.id);
   const locs = pmLocations.filter(x=>x.project_id===p.id);
+  const pOrders = pmOrders.filter(o=>o.project_id===p.id && !o.location_id);
   wrap.innerHTML = `
   <div class="psec">
-    ${p.cover_url ? `<img class="projcover" src="${esc(p.cover_url)}" alt="">` : ""}
+    ${pmCoverHTML(p, "projcover")}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div>
         <h2 style="margin:0;color:var(--navy)">${esc(p.title||"Untitled project")}</h2>
@@ -1202,6 +1355,17 @@ function renderProject(){
     ${ed && pmEditOpen && !p.archived ? pmEditForm(p) : ""}
   </div>
   <div class="psec">
+    <h3>LINKS &amp; COREBRIDGE</h3>
+    <div class="row">
+      ${p.companycam_url ? `<a href="${esc(p.companycam_url)}" target="_blank" rel="noopener"><button>Open in CompanyCam</button></a>` : ""}
+      ${p.corebridge_url ? `<a href="${esc(p.corebridge_url)}" target="_blank" rel="noopener"><button>Open in CoreBridge</button></a>` : ""}
+      ${!p.companycam_url && !p.corebridge_url ? `<span class="muted">No CompanyCam or CoreBridge link yet${ed ? " — add them with the edit (pencil) button above" : ""}.</span>` : ""}
+    </div>
+    <h3 style="margin-top:16px">PROJECT ORDERS</h3>
+    ${pOrders.length ? `<div class="locgrid">${pOrders.map(pmOrderCardHTML).join("")}</div>` : `<div class="muted">No project-level orders yet${p.job_number ? " — one is created automatically from the job #, and the CoreBridge scan fills in its work order &amp; proofs" : ""}. Orders for a specific site live on that location below.</div>`}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><input type="text" id="pmProjOrdNum" placeholder="Order # (e.g. I-CH-95448)" style="max-width:220px"><input type="text" id="pmProjOrdTitle" placeholder="Title (optional)"><button class="primary" onclick="pmAddProjectOrder()">+ Add order</button></div>` : ""}
+  </div>
+  <div class="psec">
     <h3>LOCATIONS</h3>
     ${locs.length ? `<div class="locgrid">${locs.map(l=>{ const lc = pmLocCounts(l.id); const lo = pmOrders.filter(o=>o.location_id===l.id); return `<div class="loccard" onclick="openLocation('${l.id}')">
       <div class="lname">${esc(l.name||"Location")}</div>
@@ -1211,13 +1375,10 @@ function renderProject(){
     ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><input type="text" id="pmLocName" placeholder="New location name (e.g. Rock Hill)"><input type="text" id="pmLocAddr" placeholder="Address (optional)"><button class="primary" onclick="pmAddLocation()">+ Add location</button></div>` : ""}
   </div>
   <div class="psec">
-    <h3>IMAGES</h3>
-    ${imgs.length ? `<div class="imggrid">${imgs.map(im=>`<figure>
-      <a href="${esc(im.url)}" target="_blank" rel="noopener"><img src="${esc(im.url)}" alt="${esc(im.name||"project image")}"></a>
-      <figcaption class="muted"><span>${esc(im.name||"")}</span>${ed ? `<button class="small" style="color:#B3261E" onclick="pmDeleteImage('${im.id}')">Remove</button>` : ""}</figcaption>
-    </figure>`).join("")}</div>` : `<div class="muted">No images yet.</div>`}
-    ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><label class="uploadbtn">+ Upload images<input type="file" accept="image/*" multiple style="display:none" onchange="pmAddImageFiles(this)"></label></div>
-    <div class="row" style="margin-top:8px"><input type="text" id="pmImgUrl" placeholder="…or paste an image link"><input type="text" id="pmImgName" placeholder="Caption (optional)" style="max-width:180px"><button onclick="pmAddImageUrl()">Add link</button></div>` : ""}
+    <h3>FILES &amp; PHOTOS</h3>
+    ${imgs.length ? `<div class="imggrid">${imgs.map(im=>pmFileHTML(im, ed && !p.archived)).join("")}</div>` : `<div class="muted">No files yet.</div>`}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><label class="uploadbtn">+ Upload files<input type="file" multiple style="display:none" onchange="pmAddImageFiles(this)"></label></div>
+    <div class="row" style="margin-top:8px"><input type="text" id="pmImgUrl" placeholder="…or paste a file link"><input type="text" id="pmImgName" placeholder="Caption (optional)" style="max-width:180px"><button onclick="pmAddImageUrl()">Add link</button></div>` : ""}
   </div>
   <div class="psec">
     <h3>TO-DO LIST</h3>
@@ -1248,12 +1409,14 @@ function pmEditForm(p){
       <div><label>Customer</label><input type="text" id="peCustomer" value="${esc(p.customer||"")}"></div>
       <div><label>Job #</label><input type="text" id="peJob" value="${esc(p.job_number||"")}"></div>
       <div><label>Address</label><input type="text" id="peAddress" value="${esc(p.address||"")}"></div>
+      <div><label>CompanyCam link</label><input type="text" id="peCcam" value="${esc(p.companycam_url||"")}"></div>
+      <div><label>CoreBridge link</label><input type="text" id="peCb" value="${esc(p.corebridge_url||"")}"></div>
     </div>
-    <div style="margin-top:12px"><label>Cover photo</label>
-      ${p.cover_url ? `<img class="coverprev" src="${esc(p.cover_url)}" alt="">` : `<div class="muted">No cover photo yet — it shows at the top of this project file and on its board card.</div>`}
+    <div style="margin-top:12px"><label>Cover photo or file</label>
+      ${p.cover_url ? (fileKind((p.cover_path||"").split("/").pop()||"", p.cover_url)==="image" ? `<img class="coverprev" src="${esc(p.cover_url)}" alt="">` : `<div style="max-width:340px"><a class="filebox" href="${esc(p.cover_url)}" target="_blank" rel="noopener"><span class="ext">${fileExt((p.cover_path||"").split("/").pop()||"", p.cover_url)}</span><span class="fn">${esc((p.cover_path||"").split("/").pop()||"Cover file")}</span></a></div>`) : `<div class="muted">No cover yet — it shows at the top of this project file and on its board card. PDFs and other files work too.</div>`}
       <div class="row" style="margin-top:6px">
-        <label class="uploadbtn">${p.cover_url ? "Replace photo" : "+ Upload cover photo"}<input type="file" accept="image/*" style="display:none" onchange="pmCoverUpload(this)"></label>
-        ${p.cover_url ? `<button type="button" style="color:#B3261E" onclick="pmCoverRemove()">Remove photo</button>` : ""}
+        <label class="uploadbtn">${p.cover_url ? "Replace cover" : "+ Upload cover"}<input type="file" style="display:none" onchange="pmCoverUpload(this)"></label>
+        ${p.cover_url ? `<button type="button" style="color:#B3261E" onclick="pmCoverRemove()">Remove cover</button>` : ""}
       </div>
     </div>
     <div class="row" style="margin-top:10px"><button class="primary" onclick="pmSaveEdit()">Save changes</button><button onclick="togglePmEdit()">Cancel</button></div>
@@ -1265,7 +1428,9 @@ async function pmSaveEdit(){
   const patch = { title: document.getElementById("peTitle").value.trim(),
     customer: document.getElementById("peCustomer").value.trim(),
     job_number: document.getElementById("peJob").value.trim(),
-    address: document.getElementById("peAddress").value.trim() };
+    address: document.getElementById("peAddress").value.trim(),
+    companycam_url: document.getElementById("peCcam").value.trim(),
+    corebridge_url: document.getElementById("peCb").value.trim() };
   pmEditOpen = false;
   await pmPatch(p.id, patch);
   toast("Project saved");
@@ -1378,7 +1543,7 @@ async function pmCoverUpload(inp){
   if(!SHARED){
     const url = await new Promise(res=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.readAsDataURL(f); });
     await pmPatch(p.id, {cover_url: url, cover_path: ""});
-    toast("Cover photo set"); return;
+    toast("Cover set"); return;
   }
   const path = "covers/" + p.id + "/" + Date.now() + "_" + f.name.replace(/[^\w.\-]+/g,"_");
   const { error } = await sb.storage.from("pm-images").upload(path, f);
@@ -1386,14 +1551,14 @@ async function pmCoverUpload(inp){
   if(p.cover_path){ try{ await sb.storage.from("pm-images").remove([p.cover_path]); }catch(e){} }
   const url = sb.storage.from("pm-images").getPublicUrl(path).data.publicUrl;
   await pmPatch(p.id, {cover_url: url, cover_path: path});
-  toast("Cover photo set");
+  toast("Cover set");
 }
 async function pmCoverRemove(){
   if(!isEditor()) return;
   const p = pmProjects.find(x=>x.id===openProjectId); if(!p) return;
   if(SHARED && p.cover_path){ try{ await sb.storage.from("pm-images").remove([p.cover_path]); }catch(e){} }
   await pmPatch(p.id, {cover_url: "", cover_path: ""});
-  toast("Cover photo removed");
+  toast("Cover removed");
 }
 
 function pmLocCounts(lid){
@@ -1620,10 +1785,10 @@ async function pmDeleteOrder(){
   if(!isEditor()) return;
   const o = pmOrders.find(x=>x.id===openOrderId); if(!o) return;
   if(!confirm("Delete the order page for " + (o.order_number||"this order") + "?\n\nThis cannot be undone.")) return;
-  if(!SHARED){ pmOrders = pmOrders.filter(x=>x.id!==o.id); openOrderId = null; await pmRefresh(); backToLocation(); toast("Order deleted"); return; }
+  if(!SHARED){ const destLoc = !!o.location_id; pmOrders = pmOrders.filter(x=>x.id!==o.id); openOrderId = null; await pmRefresh(); if(destLoc){ showScreen("location"); renderLocation(); } else { showScreen("project"); renderProject(); } toast("Order deleted"); return; }
   const { error } = await sb.from("pm_orders").delete().eq("id", o.id);
   if(error){ toast("Delete failed: " + error.message); return; }
-  openOrderId = null; await loadData(); backToLocation(); toast("Order deleted");
+  openOrderId = null; await loadData(); if(o.location_id){ showScreen("location"); renderLocation(); } else { showScreen("project"); renderProject(); } toast("Order deleted");
 }
 function renderOrder(){
   const wrap = document.getElementById("orderProfile"); if(!wrap) return;
@@ -1633,6 +1798,7 @@ function renderOrder(){
   const p = pmProjects.find(x=>x.id===o.project_id);
   document.getElementById("ordBannerTitle").textContent = o.order_number || "ORDER";
   document.getElementById("ordBannerSub").textContent = (p ? (p.title||"") : "") + (l ? " • " + (l.name||"") : "");
+  document.getElementById("ordBackBtn").textContent = o.location_id ? "← Location" : "← Project file";
   const ed = isEditor() && !(p && p.archived);
   const prods = Array.isArray(o.products) ? o.products : [];
   const src = (o.sources && typeof o.sources==="object") ? o.sources : {};
