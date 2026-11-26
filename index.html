@@ -78,7 +78,7 @@
   .caldow{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,0.72fr) minmax(0,0.72fr);gap:6px;margin-bottom:6px}
   .caldow div{font-size:11px;font-weight:700;color:var(--grey);text-align:center;letter-spacing:.04em}
   .calgrid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,0.72fr) minmax(0,0.72fr);gap:6px}
-  .calday{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:150px;padding:5px;cursor:pointer;min-width:0;overflow:hidden}
+  .calday{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:96px;padding:5px;cursor:pointer;min-width:0;overflow:hidden}
   .calday.dim{opacity:.42}
   .calday.today{border:2px solid var(--navy)}
   .calday.sel{background:var(--soft);border-color:var(--red)}
@@ -300,10 +300,7 @@
 
   <div id="viewCalendar" class="hidden">
     <div class="calnav">
-      <button id="calPrevBtn" onclick="shiftCalWeek(-1)">← Prev week</button>
-      <button onclick="shiftCalWeek(0)">This week</button>
-      <button onclick="shiftCalWeek(1)">Next week →</button>
-      <strong id="calLabel" style="margin-left:8px"></strong>
+      <strong id="calLabel"></strong>
     </div>
     <div class="callegend"><span><span class="dot cc-eli"></span>Eli</span><span><span class="dot cc-george"></span>George</span><span><span class="dot cc-both"></span>Eli + George</span><span><span class="dot cc-other"></span>Other / unassigned</span></div>
     <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
@@ -731,26 +728,23 @@ function renderWeek(){
 /* ---------------- Install calendar (from the Install Tracker) ---------------- */
 function crewClass(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "cc-both"; if(e) return "cc-eli"; if(g) return "cc-george"; return "cc-other"; }
 function crewLabel(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "Eli + George"; if(e) return "Eli"; if(g) return "George"; return t.crew || "Unassigned"; }
-function shiftCalWeek(n){ calOffset = n===0 ? 0 : Math.max(0, calOffset + n); renderCalendar(); }
 function renderCalendar(){
-  const mon = mondayOf(calOffset);
-  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
-  const lbl = (d, withYear) => d.toLocaleDateString("en-US", withYear ? {month:"long",day:"numeric",year:"numeric"} : {month:"long",day:"numeric"});
-  document.getElementById("calLabel").textContent = "Week of " + lbl(mon, mon.getFullYear()!==sun.getFullYear()) + " \u2013 " + lbl(sun, true);
-  const prevBtn = document.getElementById("calPrevBtn");
-  if(prevBtn) prevBtn.disabled = calOffset===0;
+  const mon = mondayOf(0);
+  const end = new Date(mon); end.setDate(mon.getDate()+41);
+  const lbl = d => d.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+  document.getElementById("calLabel").textContent = lbl(mon) + " \u2013 " + lbl(end) + "  (6 weeks)";
   const p2 = n=>String(n).padStart(2,"0");
   const iso = d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
   const todayIso = iso(new Date());
   if(!calSelDay) calSelDay = todayIso;
   const byDay = {};
   trackerInstalls.forEach(t=>{ (byDay[t.install_date] = byDay[t.install_date]||[]).push(t); });
-  document.getElementById("calGrid").innerHTML = [...Array(7)].map((_,i)=>{
+  document.getElementById("calGrid").innerHTML = [...Array(42)].map((_,i)=>{
     const d = new Date(mon); d.setDate(mon.getDate()+i);
     const di = iso(d);
     const jobs = byDay[di]||[];
-    const chips = jobs.slice(0,5).map(t=>`<div class="calchip ${crewClass(t)}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
-    const more = jobs.length>5 ? `<div class="calmore">+${jobs.length-5} more</div>` : "";
+    const chips = jobs.slice(0,3).map(t=>`<div class="calchip ${crewClass(t)}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
+    const more = jobs.length>3 ? `<div class="calmore">+${jobs.length-3} more</div>` : "";
     return `<div class="calday ${di===todayIso?"today":""} ${di===calSelDay?"sel":""}" onclick="selectCalDay('${di}')"><div class="calnum">${d.getDate()}</div>${chips}${more}</div>`;
   }).join("");
   renderCalDetail();
