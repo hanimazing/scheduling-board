@@ -75,16 +75,19 @@
   @media (max-width:640px){.weekgrid{grid-template-columns:1fr}}
   /* Install calendar (tracker) */
   .calnav{display:flex;gap:8px;align-items:center;margin-bottom:12px}
-  .caldow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+  .caldow{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,0.72fr) minmax(0,0.72fr);gap:6px;margin-bottom:6px}
   .caldow div{font-size:11px;font-weight:700;color:var(--grey);text-align:center;letter-spacing:.04em}
-  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-  .calday{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:88px;padding:5px;cursor:pointer}
+  .calgrid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,1.55fr) minmax(0,0.72fr) minmax(0,0.72fr);gap:6px}
+  .calday{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:88px;padding:5px;cursor:pointer;min-width:0;overflow:hidden}
   .calday.dim{opacity:.42}
   .calday.today{border:2px solid var(--navy)}
   .calday.sel{background:var(--soft);border-color:var(--red)}
   .calnum{font-size:12px;font-weight:700;margin-bottom:3px}
   .calchip{font-size:10.5px;line-height:1.25;border-radius:5px;padding:2px 4px;margin-bottom:3px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .calchip.install{background:#7B2CBF}.calchip.survey{background:#D96C00}.calchip.removal{background:#B3261E}
+  .cc-eli{background:#1D6FB8}.cc-george{background:#1E7B34}.cc-both{background:#7B2CBF}.cc-other{background:#5A6B7F}
+  .callegend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:12.5px;color:var(--grey)}
+  .callegend .dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .calcrew{display:inline-block;padding:1px 8px;border-radius:99px;color:#fff;font-size:11px;font-weight:700}
   .calmore{font-size:10.5px;color:var(--grey)}
   .caljob{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
   @media (max-width:640px){.calday{min-height:62px}.calchip{font-size:9.5px}}
@@ -302,6 +305,7 @@
       <button onclick="shiftMonth(1)">Next month →</button>
       <strong id="calLabel" style="margin-left:8px"></strong>
     </div>
+    <div class="callegend"><span><span class="dot cc-eli"></span>Eli</span><span><span class="dot cc-george"></span>George</span><span><span class="dot cc-both"></span>Eli + George</span><span><span class="dot cc-other"></span>Other / unassigned</span></div>
     <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
     <div class="calgrid" id="calGrid"></div>
     <div id="calDetail"></div>
@@ -725,6 +729,8 @@ function renderWeek(){
 }
 
 /* ---------------- Install calendar (from the Install Tracker) ---------------- */
+function crewClass(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "cc-both"; if(e) return "cc-eli"; if(g) return "cc-george"; return "cc-other"; }
+function crewLabel(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "Eli + George"; if(e) return "Eli"; if(g) return "George"; return t.crew || "Unassigned"; }
 function shiftMonth(n){ calOffset = n===0 ? 0 : calOffset + n; renderCalendar(); }
 function renderCalendar(){
   const now = new Date();
@@ -741,7 +747,7 @@ function renderCalendar(){
     const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
     const di = iso(d), inMonth = d.getMonth()===start.getMonth();
     const jobs = byDay[di]||[];
-    const chips = jobs.slice(0,3).map(t=>`<div class="calchip ${t.type_key||"install"}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
+    const chips = jobs.slice(0,3).map(t=>`<div class="calchip ${crewClass(t)}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
     const more = jobs.length>3 ? `<div class="calmore">+${jobs.length-3} more</div>` : "";
     return `<div class="calday ${inMonth?"":"dim"} ${di===todayIso?"today":""} ${di===calSelDay?"sel":""}" onclick="selectCalDay('${di}')"><div class="calnum">${d.getDate()}</div>${chips}${more}</div>`;
   }).join("");
@@ -760,7 +766,7 @@ function renderCalDetail(){
     const card = core ? requests.find(r=>(r.job_number||"").replace(/\D/g,"")===core && !r.archived) : null;
     const meta = [t.crew?("Crew: "+esc(t.crew)):"", t.hours!=null?esc(t.hours)+" hrs":"", t.address?esc(t.address):""].filter(Boolean).join(" • ");
     return `<div class="caljob">
-      <div><b>${esc(t.order_number||"—")}</b> — ${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""} <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
+      <div><b>${esc(t.order_number||"—")}</b> — ${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""} <span class="calcrew ${crewClass(t)}">${esc(crewLabel(t))}</span> <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
       ${meta?`<div class="muted">${meta}</div>`:""}
       ${t.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:4px">${esc(String(t.scope).slice(0,400))}${String(t.scope).length>400?"…":""}</div>`:""}
       ${card?`<div style="margin-top:6px"><button class="small" onclick="openDrawer('${card.id}')">Open in Scheduling →</button></div>`:""}
