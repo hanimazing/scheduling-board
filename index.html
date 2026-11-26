@@ -164,6 +164,18 @@
   .coverimg{width:100%;height:110px;object-fit:cover;border-radius:7px;display:block;margin-bottom:8px}
   .drawercover{width:100%;height:180px;object-fit:cover;border-radius:8px;display:block;margin-bottom:12px}
   .coverprev{width:100%;max-height:160px;object-fit:cover;border-radius:8px;display:block;margin:6px 0}
+  .projcover{width:100%;height:220px;object-fit:cover;border-radius:10px;display:block;margin-bottom:14px}
+  .locgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .loccard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;background:#FBFCFE}
+  .loccard:hover{border-color:var(--navy)}
+  .loccard .lname{font-weight:700;color:var(--navy);font-size:15px}
+  .ordtable{width:100%;border-collapse:collapse;font-size:13.5px}
+  .ordtable th{text-align:left;color:var(--navy);border-bottom:1px solid var(--line);padding:6px 8px 6px 0}
+  .ordtable td{border-bottom:1px solid var(--line);padding:6px 8px 6px 0;vertical-align:top}
+  .kvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kv{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .kv .k{font-size:11px;letter-spacing:.5px;color:var(--grey)}
+  .kv .v{font-weight:600;color:var(--navy);margin-top:2px}
 </style>
 </head>
 <body>
@@ -292,6 +304,32 @@
 </main>
 </div><!-- /screenProject -->
 
+<div id="screenLocation" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="backToProject()">← Project file</button>
+  <div>
+    <div class="rtitle" id="locBannerTitle">LOCATION</div>
+    <div class="rsub" id="locBannerSub"></div>
+  </div>
+</div>
+<main>
+  <div class="profilewrap" id="locationProfile"></div>
+</main>
+</div><!-- /screenLocation -->
+
+<div id="screenOrder" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="backToLocation()">← Location</button>
+  <div>
+    <div class="rtitle" id="ordBannerTitle">ORDER</div>
+    <div class="rsub" id="ordBannerSub"></div>
+  </div>
+</div>
+<main>
+  <div class="profilewrap" id="orderProfile"></div>
+</main>
+</div><!-- /screenOrder -->
+
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"></aside>
 
@@ -372,7 +410,9 @@ let requests = [], events = [];
 let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
 let pmProjects = [], pmTodos = [], pmNotes = [], pmImages = [];
+let pmLocations = [], pmOrders = [];
 let pmView = "board", openProjectId = null, pmEditOpen = false;
+let openLocationId = null, openOrderId = null, pmLocEditOpen = false, pmOrdEditOpen = false;
 let guideEditOpen = false;
 let ccamEditOpen = false;
 let editOpen = false;
@@ -386,7 +426,7 @@ const TYPE_META = {
 function typeMeta(t){ return TYPE_META[t] || TYPE_META.install; }
 function reqType(r){ return TYPE_META[r.type] ? r.type : "install"; }
 
-function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function uid(){ return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c=>{ const r = Math.random()*16|0, v = c==="x" ? r : (r&0x3|0x8); return v.toString(16); }); }
 function nowISO(){ return new Date().toISOString(); }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtDate(iso){
@@ -411,11 +451,11 @@ function seed(){
   events = [];
   saveLocal();
 }
-function saveLocal(){ localStorage.setItem("schedboard_v1", JSON.stringify({requests, events, pmProjects, pmTodos, pmNotes, pmImages})); }
+function saveLocal(){ localStorage.setItem("schedboard_v1", JSON.stringify({requests, events, pmProjects, pmTodos, pmNotes, pmImages, pmLocations, pmOrders})); }
 function loadLocal(){
   const raw = localStorage.getItem("schedboard_v1");
   if(!raw){ seed(); return; }
-  try{ const d = JSON.parse(raw); requests = d.requests||[]; events = d.events||[]; pmProjects = d.pmProjects||[]; pmTodos = d.pmTodos||[]; pmNotes = d.pmNotes||[]; pmImages = d.pmImages||[]; }
+  try{ const d = JSON.parse(raw); requests = d.requests||[]; events = d.events||[]; pmProjects = d.pmProjects||[]; pmTodos = d.pmTodos||[]; pmNotes = d.pmNotes||[]; pmImages = d.pmImages||[]; pmLocations = d.pmLocations||[]; pmOrders = d.pmOrders||[]; }
   catch(e){ seed(); }
 }
 
@@ -430,8 +470,11 @@ async function loadData(){
   const { data: tds } = await sb.from("pm_todos").select("*").order("created_at",{ascending:true});
   const { data: nts } = await sb.from("pm_notes").select("*").order("created_at",{ascending:true});
   const { data: ims } = await sb.from("pm_images").select("*").order("created_at",{ascending:true});
+  const { data: locs } = await sb.from("pm_locations").select("*").order("sort",{ascending:true});
+  const { data: ords } = await sb.from("pm_orders").select("*").order("created_at",{ascending:true});
   pmProjects = projs||[]; pmTodos = tds||[]; pmNotes = nts||[]; pmImages = ims||[];
-  render(); renderPm(); if(openProjectId) renderProject();
+  pmLocations = locs||[]; pmOrders = ords||[];
+  render(); renderPm(); if(openProjectId) renderProject(); if(openLocationId) renderLocation(); if(openOrderId) renderOrder();
 }
 async function addRequest(r, ev){
   if(!SHARED){ requests.push(r); events.push(ev); saveLocal(); render(); return; }
@@ -484,6 +527,8 @@ function showScreen(name){
   document.getElementById("screenRoom").classList.toggle("hidden", name!=="room");
   document.getElementById("screenPm").classList.toggle("hidden", name!=="pm");
   document.getElementById("screenProject").classList.toggle("hidden", name!=="project");
+  document.getElementById("screenLocation").classList.toggle("hidden", name!=="location");
+  document.getElementById("screenOrder").classList.toggle("hidden", name!=="order");
 }
 function enterRoom(){ showScreen("room"); showView("board"); }
 function goLobby(){ closeDrawer(); showScreen("lobby"); }
@@ -996,7 +1041,7 @@ function pmNormStatus(s){ return PM_STATUS_LABELS[s] ? s : "new"; }
 const TODO_LABELS = {todo:"To Do", doing:"Doing", done:"Done"};
 
 function enterPm(){ showScreen("pm"); showPmView(pmView); }
-function backToPm(){ openProjectId = null; pmEditOpen = false; showScreen("pm"); renderPm(); }
+function backToPm(){ openProjectId = null; openLocationId = null; openOrderId = null; pmEditOpen = false; showScreen("pm"); renderPm(); }
 function showPmView(v){
   pmView = v;
   document.getElementById("btnPmBoard").classList.toggle("active", v==="board");
@@ -1006,10 +1051,11 @@ function showPmView(v){
   renderPm();
 }
 function pmCounts(pid){
-  const t = pmTodos.filter(x=>x.project_id===pid);
+  const t = pmTodos.filter(x=>x.project_id===pid && !x.location_id);
   return { open: t.filter(x=>x.status!=="done").length, total: t.length,
            imgs: pmImages.filter(x=>x.project_id===pid).length,
-           notes: pmNotes.filter(x=>x.project_id===pid).length };
+           notes: pmNotes.filter(x=>x.project_id===pid && !x.location_id).length,
+           locs: pmLocations.filter(x=>x.project_id===pid).length };
 }
 function renderPm(){
   const board = document.getElementById("pmBoard"); if(!board) return;
@@ -1032,9 +1078,10 @@ function renderPm(){
 function pmCardHTML(p){
   const c = pmCounts(p.id);
   return `<div class="card" onclick="openProject('${p.id}')">
+    ${p.cover_url ? `<img class="coverimg" src="${esc(p.cover_url)}" alt="">` : ""}
     <div class="job">${esc(p.title||"Untitled project")}</div>
     <div class="cust">${esc(p.customer||"")}${p.job_number ? " • " + esc(p.job_number) : ""}</div>
-    <div class="meta">${c.total ? `<span class="pill">${c.open} open to-do${c.open===1?"":"s"}</span> ` : ""}${c.imgs ? `<span class="pill">${c.imgs} image${c.imgs===1?"":"s"}</span> ` : ""}${c.notes ? `<span class="pill">${c.notes} note${c.notes===1?"":"s"}</span>` : ""}</div>
+    <div class="meta">${c.locs ? `<span class="pill">${c.locs} location${c.locs===1?"":"s"}</span> ` : ""}${c.total ? `<span class="pill">${c.open} open to-do${c.open===1?"":"s"}</span> ` : ""}${c.imgs ? `<span class="pill">${c.imgs} image${c.imgs===1?"":"s"}</span> ` : ""}${c.notes ? `<span class="pill">${c.notes} note${c.notes===1?"":"s"}</span>` : ""}</div>
     ${isEditor() && !p.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="pmSetStatus('${p.id}', this.value)">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(p.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}<option value="closed">Closed &amp; Archived</option></select>` : ""}
   </div>`;
 }
@@ -1075,7 +1122,7 @@ async function pmCreateProject(){
 }
 
 /* ---------------- Project profile page ---------------- */
-function openProject(id){ openProjectId = id; pmEditOpen = false; showScreen("project"); renderProject(); }
+function openProject(id){ openProjectId = id; openLocationId = null; openOrderId = null; pmEditOpen = false; showScreen("project"); renderProject(); }
 function fmtDT(iso){
   if(!iso) return "";
   const d = new Date(iso);
@@ -1087,11 +1134,13 @@ function renderProject(){
   if(!p){ wrap.innerHTML = `<div class="empty">Project not found.</div>`; return; }
   document.getElementById("projBannerSub").textContent = (p.customer||"") + (p.job_number ? " • " + p.job_number : "");
   const ed = isEditor();
-  const todos = pmTodos.filter(x=>x.project_id===p.id);
-  const notes = pmNotes.filter(x=>x.project_id===p.id);
+  const todos = pmTodos.filter(x=>x.project_id===p.id && !x.location_id);
+  const notes = pmNotes.filter(x=>x.project_id===p.id && !x.location_id);
   const imgs = pmImages.filter(x=>x.project_id===p.id);
+  const locs = pmLocations.filter(x=>x.project_id===p.id);
   wrap.innerHTML = `
   <div class="psec">
+    ${p.cover_url ? `<img class="projcover" src="${esc(p.cover_url)}" alt="">` : ""}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div>
         <h2 style="margin:0;color:var(--navy)">${esc(p.title||"Untitled project")}</h2>
@@ -1104,6 +1153,15 @@ function renderProject(){
     ${ed && !p.archived ? `<div class="row" style="margin-top:12px;align-items:center"><label style="margin:0">Status</label>
       <select onchange="pmSetStatus('${p.id}', this.value)" style="max-width:240px">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(p.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}<option value="closed">Closed &amp; Archived</option></select></div>` : ""}
     ${ed && pmEditOpen && !p.archived ? pmEditForm(p) : ""}
+  </div>
+  <div class="psec">
+    <h3>LOCATIONS</h3>
+    ${locs.length ? `<div class="locgrid">${locs.map(l=>{ const lc = pmLocCounts(l.id); const lo = pmOrders.filter(o=>o.location_id===l.id); return `<div class="loccard" onclick="openLocation('${l.id}')">
+      <div class="lname">${esc(l.name||"Location")}</div>
+      ${l.address ? `<div class="muted">${esc(l.address)}</div>` : ""}
+      <div class="meta" style="margin-top:6px"><span class="pill">${pmStatusLabel(pmNormStatus(l.status))}</span> ${lo.length ? `<span class="pill">${lo.length} order${lo.length===1?"":"s"}</span> ` : ""}${lc.total ? `<span class="pill">${lc.open} open to-do${lc.open===1?"":"s"}</span>` : ""}</div>
+    </div>`; }).join("")}</div>` : `<div class="muted">No locations yet — add one below and hang its CoreBridge orders on it.</div>`}
+    ${ed && !p.archived ? `<div class="row" style="margin-top:12px"><input type="text" id="pmLocName" placeholder="New location name (e.g. Rock Hill)"><input type="text" id="pmLocAddr" placeholder="Address (optional)"><button class="primary" onclick="pmAddLocation()">+ Add location</button></div>` : ""}
   </div>
   <div class="psec">
     <h3>IMAGES</h3>
@@ -1144,6 +1202,13 @@ function pmEditForm(p){
       <div><label>Job #</label><input type="text" id="peJob" value="${esc(p.job_number||"")}"></div>
       <div><label>Address</label><input type="text" id="peAddress" value="${esc(p.address||"")}"></div>
     </div>
+    <div style="margin-top:12px"><label>Cover photo</label>
+      ${p.cover_url ? `<img class="coverprev" src="${esc(p.cover_url)}" alt="">` : `<div class="muted">No cover photo yet — it shows at the top of this project file and on its board card.</div>`}
+      <div class="row" style="margin-top:6px">
+        <label class="uploadbtn">${p.cover_url ? "Replace photo" : "+ Upload cover photo"}<input type="file" accept="image/*" style="display:none" onchange="pmCoverUpload(this)"></label>
+        ${p.cover_url ? `<button type="button" style="color:#B3261E" onclick="pmCoverRemove()">Remove photo</button>` : ""}
+      </div>
+    </div>
     <div class="row" style="margin-top:10px"><button class="primary" onclick="pmSaveEdit()">Save changes</button><button onclick="togglePmEdit()">Cancel</button></div>
   </div>`;
 }
@@ -1167,10 +1232,13 @@ async function pmDeleteProject(){
     pmTodos = pmTodos.filter(x=>x.project_id!==p.id);
     pmNotes = pmNotes.filter(x=>x.project_id!==p.id);
     pmImages = pmImages.filter(x=>x.project_id!==p.id);
-    openProjectId = null; saveLocal(); backToPm(); toast("Project deleted"); return;
+    pmLocations = pmLocations.filter(x=>x.project_id!==p.id);
+    pmOrders = pmOrders.filter(x=>x.project_id!==p.id);
+    openProjectId = null; openLocationId = null; openOrderId = null; saveLocal(); backToPm(); toast("Project deleted"); return;
   }
   const imgs = pmImages.filter(x=>x.project_id===p.id && x.path);
   if(imgs.length){ try{ await sb.storage.from("pm-images").remove(imgs.map(x=>x.path)); }catch(e){} }
+  if(p.cover_path){ try{ await sb.storage.from("pm-images").remove([p.cover_path]); }catch(e){} }
   const { error } = await sb.from("pm_projects").delete().eq("id", p.id);
   if(error){ toast("Delete failed: " + error.message); return; }
   openProjectId = null; await loadData(); backToPm(); toast("Project deleted");
@@ -1246,6 +1314,313 @@ async function pmDeleteImage(id){
   const { error } = await sb.from("pm_images").delete().eq("id", id);
   if(error){ toast("Delete failed: " + error.message); return; }
   await pmAfter();
+}
+
+/* ---------------- PM cover photos, locations & orders ---------------- */
+async function pmRefresh(){
+  if(SHARED){ await loadData(); return; }
+  saveLocal(); renderPm();
+  if(openProjectId) renderProject();
+  if(openLocationId) renderLocation();
+  if(openOrderId) renderOrder();
+}
+async function pmCoverUpload(inp){
+  if(!isEditor()) return;
+  const f = (inp.files||[])[0]; if(!f) return;
+  const p = pmProjects.find(x=>x.id===openProjectId); if(!p) return;
+  if(!SHARED){
+    const url = await new Promise(res=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.readAsDataURL(f); });
+    await pmPatch(p.id, {cover_url: url, cover_path: ""});
+    toast("Cover photo set"); return;
+  }
+  const path = "covers/" + p.id + "/" + Date.now() + "_" + f.name.replace(/[^\w.\-]+/g,"_");
+  const { error } = await sb.storage.from("pm-images").upload(path, f);
+  if(error){ toast("Upload failed: " + error.message); return; }
+  if(p.cover_path){ try{ await sb.storage.from("pm-images").remove([p.cover_path]); }catch(e){} }
+  const url = sb.storage.from("pm-images").getPublicUrl(path).data.publicUrl;
+  await pmPatch(p.id, {cover_url: url, cover_path: path});
+  toast("Cover photo set");
+}
+async function pmCoverRemove(){
+  if(!isEditor()) return;
+  const p = pmProjects.find(x=>x.id===openProjectId); if(!p) return;
+  if(SHARED && p.cover_path){ try{ await sb.storage.from("pm-images").remove([p.cover_path]); }catch(e){} }
+  await pmPatch(p.id, {cover_url: "", cover_path: ""});
+  toast("Cover photo removed");
+}
+
+function pmLocCounts(lid){
+  const t = pmTodos.filter(x=>x.location_id===lid);
+  return { open: t.filter(x=>x.status!=="done").length, total: t.length,
+           notes: pmNotes.filter(x=>x.location_id===lid).length };
+}
+async function pmLocPatch(id, patch){
+  patch.updated_at = nowISO();
+  if(!SHARED){ const l = pmLocations.find(x=>x.id===id); if(l) Object.assign(l, patch); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_locations").update(patch).eq("id", id);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+}
+async function pmAddLocation(){
+  if(!isEditor()) return;
+  const name = document.getElementById("pmLocName").value.trim();
+  if(!name){ toast("Give the location a name"); return; }
+  const row = { id: uid(), project_id: openProjectId, name,
+    address: document.getElementById("pmLocAddr").value.trim(),
+    status: "active", sort: pmLocations.filter(x=>x.project_id===openProjectId).length,
+    created_at: nowISO(), updated_at: nowISO() };
+  if(!SHARED){ pmLocations.push(row); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_locations").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+  toast("Location added");
+}
+function openLocation(id){
+  const l = pmLocations.find(x=>x.id===id); if(!l) return;
+  openProjectId = l.project_id; openLocationId = id; openOrderId = null; pmLocEditOpen = false;
+  showScreen("location"); renderLocation();
+}
+function backToProject(){ openLocationId = null; openOrderId = null; showScreen("project"); renderProject(); }
+async function pmSetLocStatus(id, value){ if(!isEditor()) return; await pmLocPatch(id, {status:value}); toast("Status: " + pmStatusLabel(value)); }
+function toggleLocEdit(){ pmLocEditOpen = !pmLocEditOpen; renderLocation(); }
+function pmLocEditForm(l){
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+    <div class="formgrid">
+      <div><label>Location name</label><input type="text" id="leName" value="${esc(l.name||"")}"></div>
+      <div><label>Address</label><input type="text" id="leAddr" value="${esc(l.address||"")}"></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="primary" onclick="pmSaveLocEdit()">Save changes</button><button onclick="toggleLocEdit()">Cancel</button></div>
+  </div>`;
+}
+async function pmSaveLocEdit(){
+  if(!isEditor()) return;
+  pmLocEditOpen = false;
+  await pmLocPatch(openLocationId, { name: document.getElementById("leName").value.trim(), address: document.getElementById("leAddr").value.trim() });
+  toast("Location saved");
+}
+async function pmDeleteLocation(){
+  if(!isEditor()) return;
+  const l = pmLocations.find(x=>x.id===openLocationId); if(!l) return;
+  if(!confirm("Delete the location \"" + (l.name||"") + "\" permanently?\n\nIts order pages, to-dos and notes go with it. This cannot be undone.")) return;
+  if(!SHARED){
+    pmLocations = pmLocations.filter(x=>x.id!==l.id);
+    pmOrders = pmOrders.filter(x=>x.location_id!==l.id);
+    pmTodos = pmTodos.filter(x=>x.location_id!==l.id);
+    pmNotes = pmNotes.filter(x=>x.location_id!==l.id);
+    openLocationId = null; await pmRefresh(); backToProject(); toast("Location deleted"); return;
+  }
+  await sb.from("pm_todos").delete().eq("location_id", l.id);
+  await sb.from("pm_notes").delete().eq("location_id", l.id);
+  const { error } = await sb.from("pm_locations").delete().eq("id", l.id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  openLocationId = null; await loadData(); backToProject(); toast("Location deleted");
+}
+function renderLocation(){
+  const wrap = document.getElementById("locationProfile"); if(!wrap) return;
+  const l = pmLocations.find(x=>x.id===openLocationId);
+  if(!l){ wrap.innerHTML = `<div class="empty">Location not found.</div>`; return; }
+  const p = pmProjects.find(x=>x.id===l.project_id);
+  document.getElementById("locBannerTitle").textContent = (l.name||"LOCATION").toUpperCase();
+  document.getElementById("locBannerSub").textContent = (p ? (p.title||"") : "") + (l.address ? " • " + l.address : "");
+  const ed = isEditor() && !(p && p.archived);
+  const orders = pmOrders.filter(o=>o.location_id===l.id);
+  const todos = pmTodos.filter(x=>x.location_id===l.id);
+  const notes = pmNotes.filter(x=>x.location_id===l.id);
+  wrap.innerHTML = `
+  <div class="psec">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div>
+        <h2 style="margin:0;color:var(--navy)">${esc(l.name||"Location")}</h2>
+        <div class="muted" style="margin-top:4px">${p ? esc(p.title||"") + (p.customer ? " • " + esc(p.customer) : "") : ""}${l.address ? "<br>" + esc(l.address) : ""}</div>
+        <div style="margin-top:8px"><span class="pill">${pmStatusLabel(pmNormStatus(l.status))}</span></div>
+      </div>
+      ${ed ? `<span style="display:flex;gap:8px"><button class="editicon" onclick="toggleLocEdit()" title="Edit location">✎</button><button class="editicon del" onclick="pmDeleteLocation()" title="Delete this location">✕</button></span>` : ""}
+    </div>
+    ${ed ? `<div class="row" style="margin-top:12px;align-items:center"><label style="margin:0">Status</label>
+      <select onchange="pmSetLocStatus('${l.id}', this.value)" style="max-width:240px">${PM_STATUSES.map(s=>`<option value="${s.id}" ${pmNormStatus(l.status)===s.id?"selected":""}>${pmStatusLabel(s.id)}</option>`).join("")}</select></div>` : ""}
+    ${ed && pmLocEditOpen ? pmLocEditForm(l) : ""}
+  </div>
+  <div class="psec">
+    <h3>COREBRIDGE ORDERS</h3>
+    ${orders.length ? `<div class="locgrid">${orders.map(o=>`<div class="loccard" onclick="openOrder('${o.id}')">
+      <div class="lname">${esc(o.order_number||"Order")}</div>
+      ${o.title ? `<div class="muted">${esc(o.title)}</div>` : ""}
+      <div class="meta" style="margin-top:6px">${o.cb_status ? `<span class="pill">${esc(o.cb_status)}</span> ` : ""}${o.tracker_status ? `<span class="pill">Tracker: ${esc(o.tracker_status)}</span> ` : ""}${o.due_date ? `<span class="pill">Due ${fmtDate(o.due_date)}</span> ` : ""}${(o.total!==null && o.total!==undefined && o.total!=="") ? `<span class="pill">${fmtMoney(o.total)}</span>` : ""}</div>
+    </div>`).join("")}</div>` : `<div class="muted">No orders yet — add the CoreBridge order numbers for this location.</div>`}
+    ${ed ? `<div class="row" style="margin-top:12px"><input type="text" id="pmOrdNum" placeholder="Order # (e.g. I-CH-95448)" style="max-width:220px"><input type="text" id="pmOrdTitle" placeholder="Title (optional)"><button class="primary" onclick="pmAddOrder()">+ Add order</button></div>` : ""}
+  </div>
+  <div class="psec">
+    <h3>TO-DO LIST</h3>
+    ${todos.length ? todos.map(t=>`<div class="todorow">
+      ${ed ? `<select class="todoselect" onchange="pmLocSetTodoStatus('${t.id}', this.value)"><option value="todo" ${t.status==="todo"?"selected":""}>To Do</option><option value="doing" ${t.status==="doing"?"selected":""}>Doing</option><option value="done" ${t.status==="done"?"selected":""}>Done</option></select>` : `<span class="pill ${t.status}">${TODO_LABELS[t.status]||"To Do"}</span>`}
+      <span class="todotext ${t.status==="done"?"done":""}">${esc(t.text)}</span>
+      ${ed ? `<button class="small" style="color:#B3261E" onclick="pmLocDeleteTodo('${t.id}')">✕</button>` : ""}
+    </div>`).join("") : `<div class="muted">Nothing on the list yet.</div>`}
+    ${ed ? `<div class="row" style="margin-top:10px"><input type="text" id="pmLocTodoText" placeholder="Add a to-do for this location…"><button class="primary" onclick="pmLocAddTodo()">Add</button></div>` : ""}
+  </div>
+  <div class="psec">
+    <h3>NOTES</h3>
+    <div class="thread">${notes.length ? notes.map(n=>`<div class="event comment">
+      <span class="who ${n.actor==="Hannah"?"hannah":(n.actor==="Jordan"||n.actor==="Hannah (personal)")?"jordan":"system"}">${esc(n.actor)}</span>
+      <span class="when">${fmtDT(n.created_at)}</span>
+      <div class="body">${esc(n.body)}</div>
+    </div>`).join("") : `<div class="muted">No notes yet.</div>`}</div>
+    <label>Note for the record</label>
+    <textarea id="pmLocNoteText" placeholder="Add a note to this location"></textarea>
+    <div class="row" style="margin-top:8px"><button onclick="pmLocAddNote()">Add note</button></div>
+  </div>`;
+}
+async function pmLocAddTodo(){
+  if(!isEditor()) return;
+  const inp = document.getElementById("pmLocTodoText");
+  const text = inp.value.trim(); if(!text) return;
+  const row = { id: uid(), project_id: openProjectId, location_id: openLocationId, text, status: "todo", created_by: actor, created_at: nowISO() };
+  if(!SHARED){ pmTodos.push(row); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_todos").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+}
+async function pmLocSetTodoStatus(id, status){
+  if(!isEditor()) return;
+  if(!SHARED){ const t = pmTodos.find(x=>x.id===id); if(t) t.status = status; await pmRefresh(); return; }
+  const { error } = await sb.from("pm_todos").update({status}).eq("id", id);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+}
+async function pmLocDeleteTodo(id){
+  if(!isEditor()) return;
+  if(!SHARED){ pmTodos = pmTodos.filter(x=>x.id!==id); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_todos").delete().eq("id", id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  await pmRefresh();
+}
+async function pmLocAddNote(){
+  const inp = document.getElementById("pmLocNoteText");
+  const body = inp.value.trim(); if(!body) return;
+  const row = { id: uid(), project_id: openProjectId, location_id: openLocationId, actor, body, created_at: nowISO() };
+  if(!SHARED){ pmNotes.push(row); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_notes").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+}
+
+/* ---------------- PM orders ---------------- */
+function fmtMoney(n){
+  if(n===null || n===undefined || n==="") return "—";
+  const v = Number(n); if(isNaN(v)) return "—";
+  return "$" + v.toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtDate(d){
+  if(!d) return "—";
+  const dt = new Date(String(d).slice(0,10) + "T12:00:00");
+  return isNaN(dt) ? String(d) : dt.toLocaleDateString("en-US",{month:"short", day:"numeric", year:"numeric"});
+}
+function fmtSync(iso){
+  if(!iso) return "never";
+  const d = new Date(iso);
+  return isNaN(d) ? "never" : d.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " " + d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+}
+async function pmOrdPatch(id, patch){
+  patch.updated_at = nowISO();
+  if(!SHARED){ const o = pmOrders.find(x=>x.id===id); if(o) Object.assign(o, patch); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_orders").update(patch).eq("id", id);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+}
+async function pmAddOrder(){
+  if(!isEditor()) return;
+  const num = document.getElementById("pmOrdNum").value.trim();
+  if(!num){ toast("Enter the CoreBridge order number"); return; }
+  const row = { id: uid(), location_id: openLocationId, project_id: openProjectId,
+    order_number: num, title: document.getElementById("pmOrdTitle").value.trim(),
+    cb_status: "", tracker_status: "", due_date: null, total: null, balance: null,
+    companycam_url: "", jobfiles_url: "", products: [], sources: {}, last_synced_at: null,
+    created_at: nowISO(), updated_at: nowISO() };
+  if(!SHARED){ pmOrders.push(row); await pmRefresh(); return; }
+  const { error } = await sb.from("pm_orders").insert(row);
+  if(error){ toast("Save failed: " + error.message); return; }
+  await pmRefresh();
+  toast("Order added — the scans will fill in its page");
+}
+function openOrder(id){
+  const o = pmOrders.find(x=>x.id===id); if(!o) return;
+  openLocationId = o.location_id; openProjectId = o.project_id; openOrderId = id; pmOrdEditOpen = false;
+  showScreen("order"); renderOrder();
+}
+function backToLocation(){ openOrderId = null; showScreen("location"); renderLocation(); }
+function toggleOrdEdit(){ pmOrdEditOpen = !pmOrdEditOpen; renderOrder(); }
+function pmOrdEditForm(o){
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+    <div class="formgrid">
+      <div><label>Order #</label><input type="text" id="oeNum" value="${esc(o.order_number||"")}"></div>
+      <div><label>Title</label><input type="text" id="oeTitle" value="${esc(o.title||"")}"></div>
+      <div><label>CompanyCam link</label><input type="text" id="oeCcam" value="${esc(o.companycam_url||"")}"></div>
+      <div><label>Job Files link</label><input type="text" id="oeFiles" value="${esc(o.jobfiles_url||"")}"></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="primary" onclick="pmSaveOrdEdit()">Save changes</button><button onclick="toggleOrdEdit()">Cancel</button></div>
+  </div>`;
+}
+async function pmSaveOrdEdit(){
+  if(!isEditor()) return;
+  pmOrdEditOpen = false;
+  await pmOrdPatch(openOrderId, { order_number: document.getElementById("oeNum").value.trim(),
+    title: document.getElementById("oeTitle").value.trim(),
+    companycam_url: document.getElementById("oeCcam").value.trim(),
+    jobfiles_url: document.getElementById("oeFiles").value.trim() });
+  toast("Order saved");
+}
+async function pmDeleteOrder(){
+  if(!isEditor()) return;
+  const o = pmOrders.find(x=>x.id===openOrderId); if(!o) return;
+  if(!confirm("Delete the order page for " + (o.order_number||"this order") + "?\n\nThis cannot be undone.")) return;
+  if(!SHARED){ pmOrders = pmOrders.filter(x=>x.id!==o.id); openOrderId = null; await pmRefresh(); backToLocation(); toast("Order deleted"); return; }
+  const { error } = await sb.from("pm_orders").delete().eq("id", o.id);
+  if(error){ toast("Delete failed: " + error.message); return; }
+  openOrderId = null; await loadData(); backToLocation(); toast("Order deleted");
+}
+function renderOrder(){
+  const wrap = document.getElementById("orderProfile"); if(!wrap) return;
+  const o = pmOrders.find(x=>x.id===openOrderId);
+  if(!o){ wrap.innerHTML = `<div class="empty">Order not found.</div>`; return; }
+  const l = pmLocations.find(x=>x.id===o.location_id);
+  const p = pmProjects.find(x=>x.id===o.project_id);
+  document.getElementById("ordBannerTitle").textContent = o.order_number || "ORDER";
+  document.getElementById("ordBannerSub").textContent = (p ? (p.title||"") : "") + (l ? " • " + (l.name||"") : "");
+  const ed = isEditor() && !(p && p.archived);
+  const prods = Array.isArray(o.products) ? o.products : [];
+  const src = (o.sources && typeof o.sources==="object") ? o.sources : {};
+  const srcBits = [["CoreBridge", src.corebridge], ["Tracker", src.tracker], ["CompanyCam", src.companycam], ["Job Files", src.drive]].filter(x=>x[1]).map(x=>x[0] + " " + fmtSync(x[1])).join(" · ");
+  wrap.innerHTML = `
+  <div class="psec">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div>
+        <h2 style="margin:0;color:var(--navy)">${esc(o.order_number||"Order")}</h2>
+        <div class="muted" style="margin-top:4px">${esc(o.title||"")}${p ? "<br>" + esc(p.title||"") : ""}${l ? " • " + esc(l.name||"") : ""}</div>
+        <div style="margin-top:8px">${o.cb_status ? `<span class="pill">${esc(o.cb_status)}</span> ` : ""}${o.tracker_status ? `<span class="pill">Tracker: ${esc(o.tracker_status)}</span>` : ""}</div>
+      </div>
+      ${ed ? `<span style="display:flex;gap:8px"><button class="editicon" onclick="toggleOrdEdit()" title="Edit order">✎</button><button class="editicon del" onclick="pmDeleteOrder()" title="Delete this order page">✕</button></span>` : ""}
+    </div>
+    ${ed && pmOrdEditOpen ? pmOrdEditForm(o) : ""}
+    <div class="kvgrid" style="margin-top:14px">
+      <div class="kv"><div class="k">COREBRIDGE STATUS</div><div class="v">${esc(o.cb_status||"—")}</div></div>
+      <div class="kv"><div class="k">TRACKER STATUS</div><div class="v">${esc(o.tracker_status||"—")}</div></div>
+      <div class="kv"><div class="k">PRODUCT DUE DATE</div><div class="v">${o.due_date ? fmtDate(o.due_date) : "—"}</div></div>
+      <div class="kv"><div class="k">ORDER TOTAL</div><div class="v">${fmtMoney(o.total)}</div></div>
+      <div class="kv"><div class="k">BALANCE DUE</div><div class="v">${fmtMoney(o.balance)}</div></div>
+      <div class="kv"><div class="k">LAST SYNCED</div><div class="v">${o.last_synced_at ? fmtSync(o.last_synced_at) : "—"}</div></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      ${o.companycam_url ? `<a href="${esc(o.companycam_url)}" target="_blank" rel="noopener"><button>Open in CompanyCam</button></a>` : ""}
+      ${o.jobfiles_url ? `<a href="${esc(o.jobfiles_url)}" target="_blank" rel="noopener"><button>Job Files</button></a>` : ""}
+    </div>
+    ${srcBits ? `<div class="muted" style="margin-top:10px">Synced: ${esc(srcBits)}</div>` : `<div class="muted" style="margin-top:10px">Not synced yet — the weekday scans fill this page in from CoreBridge, the tracker, CompanyCam and the Job Files folder.</div>`}
+  </div>
+  <div class="psec">
+    <h3>PRODUCTS (FROM COREBRIDGE)</h3>
+    ${prods.length ? `<table class="ordtable"><tr><th style="width:34%">Product</th><th>Details</th><th style="width:110px">Due</th><th style="width:130px">Status</th></tr>
+      ${prods.map(pr=>`<tr><td>${esc(pr.name||"")}</td><td>${esc(pr.desc||"")}</td><td>${pr.due ? fmtDate(pr.due) : "—"}</td><td>${esc(pr.status||"")}</td></tr>`).join("")}
+    </table>` : `<div class="muted">No product data yet — the CoreBridge scan fills this in.</div>`}
+  </div>`;
 }
 
 /* ---------------- Actor / auth ---------------- */
