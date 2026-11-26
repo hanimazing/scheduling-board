@@ -178,7 +178,7 @@
 <body>
 <header>
   <h1>PROJECT MISSION CONTROL</h1>
-  <div class="sub">FASTSIGNS Charlotte — South Tryon &nbsp;•&nbsp; One app, one room per team. Pick a room to get started.</div>
+  <div class="sub">FASTSIGNS Charlotte — South Tryon &nbsp;•&nbsp; One app for the whole operation. Pick a section to get started.</div>
 </header>
 
 <div id="screenLobby" class="hidden">
@@ -186,22 +186,20 @@
     <div style="text-align:right;max-width:900px;margin:0 auto"><button class="ghost" onclick="signOut()">Sign out</button></div>
     <div class="rooms">
       <div class="roomcard live" onclick="enterRoom()">
-        <div class="rname">Installation Room</div>
+        <div class="rname">Scheduling</div>
         <div class="rdesc">Install scheduling — requests, date proposals and decisions between Hannah Ewing and Jordan Blake.</div>
-        <div class="rgo">Enter room →</div>
+        <div class="rgo">Enter →</div>
       </div>
       <div class="roomcard soon">
-        <div class="rname">Sales Room</div>
-        <div class="rdesc">Coming soon.</div>
+        <div class="rname">Coming Soon</div>
       </div>
       <div class="roomcard live" onclick="enterPm()">
-        <div class="rname">PM Room</div>
+        <div class="rname">Project Management</div>
         <div class="rdesc">Project files — images, to-do lists, notes and statuses for the jobs Hannah is managing.</div>
-        <div class="rgo">Enter room →</div>
+        <div class="rgo">Enter →</div>
       </div>
       <div class="roomcard soon">
-        <div class="rname">Management Room</div>
-        <div class="rdesc">Coming soon.</div>
+        <div class="rname">Coming Soon</div>
       </div>
     </div>
   </main>
@@ -211,7 +209,7 @@
 <div class="roombanner">
   <button class="small" onclick="goLobby()">← Lobby</button>
   <div>
-    <div class="rtitle">INSTALLATION ROOM</div>
+    <div class="rtitle">SCHEDULING</div>
     <div class="rsub">Install requests, date proposals &amp; decisions — Hannah Ewing &amp; Jordan Blake</div>
   </div>
 </div>
@@ -268,7 +266,7 @@
 <div class="roombanner">
   <button class="small" onclick="goLobby()">← Lobby</button>
   <div>
-    <div class="rtitle">PM ROOM</div>
+    <div class="rtitle">PROJECT MANAGEMENT</div>
     <div class="rsub">Project files — images, to-dos, notes &amp; statuses</div>
   </div>
 </div>
@@ -290,7 +288,7 @@
 
 <div id="screenProject" class="hidden">
 <div class="roombanner">
-  <button class="small" onclick="backToPm()">← PM Room</button>
+  <button class="small" onclick="backToPm()">← Project Management</button>
   <div>
     <div class="rtitle" id="projBannerTitle">PROJECT FILE</div>
     <div class="rsub" id="projBannerSub"></div>
@@ -502,7 +500,7 @@ async function updateRequest(id, patch){
 }
 async function patchRequest(id, patch){ await updateRequest(id, patch); }
 
-/* When a job becomes Scheduled, open its project file in the PM Room
+/* When a job becomes Scheduled, open its project file in Project Management
    (once — later schedule changes never duplicate it). */
 async function ensurePmProject(r){
   if(!r || normStatus(r.status)!=="scheduled" || r.pm_project_id) return;
@@ -514,7 +512,7 @@ async function ensurePmProject(r){
   const proj = { id: uid(), title: r.customer || r.job_number || "Project", customer: r.customer||"",
     job_number: r.job_number||"", address: r.address||"", status: "new", archived: false,
     created_at: nowISO(), updated_at: nowISO() };
-  const lines = ["Created automatically from the Installation Room when this job was scheduled" +
+  const lines = ["Created automatically from Scheduling when this job was scheduled" +
     (r.agreed_date ? " for " + fmtDate(r.agreed_date) : "") + (r.agreed_crew ? " — crew: " + r.agreed_crew : "") + "."];
   if(r.scope) lines.push("Scope: " + r.scope);
   const contact = [r.contact_name, r.contact_phone, r.contact_email].filter(Boolean).join(" • ");
@@ -525,12 +523,12 @@ async function ensurePmProject(r){
   if(!SHARED){ pmProjects.push(proj); pmNotes.push(note); }
   else {
     const { error } = await sb.from("pm_projects").insert(proj);
-    if(error){ toast("PM Room project could not be created: " + error.message); return; }
+    if(error){ toast("Project Management project could not be created: " + error.message); return; }
     await sb.from("pm_notes").insert(note);
     pmProjects.push(proj); pmNotes.push(note);
   }
   await updateRequest(r.id, {pm_project_id: proj.id});
-  toast("Project created in the PM Room");
+  toast("Project created in Project Management");
 }
 async function addEvent(ev, reqPatch){
   if(!SHARED){
@@ -732,7 +730,7 @@ function renderDrawer(){
     if(!pp && isJ && ["new","in-review"].includes(st)) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
     if(!pp && isJ && st==="ready") inner += proposeForm("Propose an install date", "Propose date");
     if(st==="scheduled"){
-      inner += `<div class="muted" style="margin-bottom:8px">Scheduled: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. A project file is open in the PM Room. This card archives itself the day after the scheduled date — or archive it now if the install finished early.</div>`;
+      inner += `<div class="muted" style="margin-bottom:8px">Scheduled: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. A project file is open in Project Management. This card archives itself the day after the scheduled date — or archive it now if the install finished early.</div>`;
       if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button><button class="red" onclick="completeInstall()">Install done → Archive</button></div>`;
       if(isH && !pp) inner += proposeForm("Re-open with a new date", "Propose new date");
     }
@@ -1050,7 +1048,7 @@ async function createRequest(){
   toast("Request added to the board");
 }
 
-/* ---------------- Cover photos (Installation Room) ---------------- */
+/* ---------------- Cover photos (Scheduling) ---------------- */
 async function coverUpload(inp){
   if(!isEditor()) return;
   const f = (inp.files||[])[0]; if(!f) return;
@@ -1076,7 +1074,7 @@ async function coverRemove(){
   toast("Cover photo removed");
 }
 
-/* ---------------- PM Room ---------------- */
+/* ---------------- Project Management ---------------- */
 const PM_STATUSES = [
   {id:"new", label:"NEW"},
   {id:"in-review", label:"IN-REVIEW"},
