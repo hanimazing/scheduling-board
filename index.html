@@ -33,7 +33,7 @@
   .modebadge.shared{background:#E2F2E5;color:var(--ok);border-color:#9CCBA6}
   main{padding:16px 20px 40px}
   /* Board */
-  .board{display:grid;grid-template-columns:repeat(7,minmax(205px,1fr));gap:12px;align-items:start}
+  .board{display:grid;grid-template-columns:repeat(5,minmax(205px,1fr));gap:12px;align-items:start}
   .card select.statusbar{width:100%;margin-top:8px;padding:5px 6px;font-size:12.5px}
   @media (max-width:1200px){.board{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:640px){.board{grid-template-columns:1fr}}
@@ -395,13 +395,11 @@ const STATUSES = [
   {id:"in-review",     label:"IN-REVIEW"},
   {id:"ready",         label:"READY TO SCHEDULE"},
   {id:"scheduled",     label:"SCHEDULED"},
-  {id:"in-progress",   label:"IN-PROGRESS"},
-  {id:"completed",     label:"COMPLETED"},
   {id:"subcontracted", label:"SUBCONTRACTED"},
 ];
-const STATUS_LABELS = {new:"New","in-review":"In-Review",ready:"Ready to Schedule",scheduled:"Scheduled","in-progress":"In-Progress",completed:"Completed",subcontracted:"Subcontracted",closed:"Closed & Archived"};
+const STATUS_LABELS = {new:"New","in-review":"In-Review",ready:"Ready to Schedule",scheduled:"Scheduled",subcontracted:"Subcontracted",closed:"Closed & Archived"};
 function statusLabel(id){ return STATUS_LABELS[id] || id || "New"; }
-function normStatus(s){ return {proposed:"ready",countered:"ready",agreed:"scheduled",tracker:"scheduled"}[s] || (STATUS_LABELS[s] ? s : "new"); }
+function normStatus(s){ return {proposed:"ready",countered:"ready",agreed:"scheduled",tracker:"scheduled","in-progress":"scheduled",completed:"closed"}[s] || (STATUS_LABELS[s] ? s : "new"); }
 const INSTALLERS = ["Eli","George","MZ"];
 
 /* ---------------- State ---------------- */
@@ -460,12 +458,26 @@ function loadLocal(){
 }
 
 /* ---------------- Data layer ---------------- */
+function todayStr(){ const t = new Date(); return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0"); }
 async function loadData(){
-  if(!SHARED){ loadLocal(); render(); renderPm(); return; }
+  if(!SHARED){ loadLocal();
+    const ts = todayStr();
+    requests.filter(r=>!r.archived && normStatus(r.status)==="scheduled" && r.agreed_date && r.agreed_date < ts)
+      .forEach(r=>{ r.archived = true; events.push({id:uid(), request_id:r.id, actor:"System", type:"status", body:"Auto-archived — the scheduled date (" + fmtDate(r.agreed_date) + ") has passed.", date:null, crew:null, created_at:nowISO()}); });
+    render(); renderPm(); return; }
   const { data: reqs, error: e1 } = await sb.from("sched_requests").select("*").order("created_at",{ascending:true});
   const { data: evs,  error: e2 } = await sb.from("sched_events").select("*").order("created_at",{ascending:true});
   if(e1 || e2){ toast("Could not load from Supabase — check connection."); return; }
   requests = reqs; events = evs;
+  // Auto-archive: a scheduled install whose date has passed files itself away.
+  const tstr = todayStr();
+  for(const r of requests.filter(x=>!x.archived && normStatus(x.status)==="scheduled" && x.agreed_date && x.agreed_date < tstr)){
+    const ev = { id: uid(), request_id: r.id, actor: "System", type: "status",
+      body: "Auto-archived — the scheduled date (" + fmtDate(r.agreed_date) + ") has passed.", date: null, crew: null, created_at: nowISO() };
+    const { error: ae } = await sb.from("sched_events").insert(ev);
+    const { error: ar } = await sb.from("sched_requests").update({archived:true}).eq("id", r.id);
+    if(!ae && !ar){ r.archived = true; events.push(ev); }
+  }
   const { data: projs } = await sb.from("pm_projects").select("*").order("created_at",{ascending:true});
   const { data: tds } = await sb.from("pm_todos").select("*").order("created_at",{ascending:true});
   const { data: nts } = await sb.from("pm_notes").select("*").order("created_at",{ascending:true});
@@ -491,6 +503,38 @@ async function updateRequest(id, patch){
   const { error } = await sb.from("sched_requests").update(patch).eq("id", id);
   if(error){ toast("Update failed: " + error.message); return; }
   await loadData(); if(openId===id) renderDrawer();
+}
+async function patchRequest(id, patch){ await updateRequest(id, patch); }
+
+/* When a job becomes Scheduled, open its project file in the PM Room
+   (once — later schedule changes never duplicate it). */
+async function ensurePmProject(r){
+  if(!r || normStatus(r.status)!=="scheduled" || r.pm_project_id) return;
+  const jn = (r.job_number||"").trim();
+  if(jn){
+    const existing = pmProjects.find(p=>(p.job_number||"").trim()===jn);
+    if(existing){ await updateRequest(r.id, {pm_project_id: existing.id}); return; }
+  }
+  const proj = { id: uid(), title: r.customer || r.job_number || "Project", customer: r.customer||"",
+    job_number: r.job_number||"", address: r.address||"", status: "new", archived: false,
+    created_at: nowISO(), updated_at: nowISO() };
+  const lines = ["Created automatically from the Installation Room when this job was scheduled" +
+    (r.agreed_date ? " for " + fmtDate(r.agreed_date) : "") + (r.agreed_crew ? " — crew: " + r.agreed_crew : "") + "."];
+  if(r.scope) lines.push("Scope: " + r.scope);
+  const contact = [r.contact_name, r.contact_phone, r.contact_email].filter(Boolean).join(" • ");
+  if(contact) lines.push("Contact: " + contact);
+  if(r.companycam_url) lines.push("CompanyCam: " + r.companycam_url);
+  if(r.guide_url) lines.push("Job Files: " + r.guide_url);
+  const note = { id: uid(), project_id: proj.id, location_id: null, actor: "System", body: lines.join("\n"), created_at: nowISO() };
+  if(!SHARED){ pmProjects.push(proj); pmNotes.push(note); }
+  else {
+    const { error } = await sb.from("pm_projects").insert(proj);
+    if(error){ toast("PM Room project could not be created: " + error.message); return; }
+    await sb.from("pm_notes").insert(note);
+    pmProjects.push(proj); pmNotes.push(note);
+  }
+  await updateRequest(r.id, {pm_project_id: proj.id});
+  toast("Project created in the PM Room");
 }
 async function addEvent(ev, reqPatch){
   if(!SHARED){
@@ -559,7 +603,7 @@ function duePill(r){
 function cardHTML(r){
   const lp = lastProposal(r.id);
   let dateLine = "";
-  if(r.agreed_date && ["scheduled","in-progress","completed"].includes(normStatus(r.status))) dateLine = `<div class="dateline" style="color:var(--ok)">✓ ${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</div>`;
+  if(r.agreed_date && normStatus(r.status)==="scheduled") dateLine = `<div class="dateline" style="color:var(--ok)">✓ ${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</div>`;
   else if(lp) dateLine = `<div class="dateline">${lp.type==="countered"?"Countered: ":"Proposed: "}${fmtDate(lp.date)}${lp.crew?" — "+esc(lp.crew):""} <span style="color:var(--grey);font-weight:400">(by ${esc(lp.actor)})</span></div>`;
   const evs = reqEvents(r.id);
   const last = evs.length ? evs[evs.length-1] : null;
@@ -607,7 +651,7 @@ function renderWeek(){
   const todayIso = iso(new Date());
   document.getElementById("weekGrid").innerHTML = days.map(d=>{
     const di = iso(d);
-    const jobs = requests.filter(r=>!r.archived && ["scheduled","in-progress"].includes(normStatus(r.status)) && r.agreed_date===di);
+    const jobs = requests.filter(r=>!r.archived && normStatus(r.status)==="scheduled" && r.agreed_date===di);
     const loads = {};
     INSTALLERS.forEach(n=>loads[n]=0);
     let eliHeavy = 0;
@@ -692,17 +736,9 @@ function renderDrawer(){
     if(!pp && isJ && ["new","in-review"].includes(st)) inner += `<div class="muted">Waiting on Hannah to propose a date.</div>`;
     if(!pp && isJ && st==="ready") inner += proposeForm("Propose an install date", "Propose date");
     if(st==="scheduled"){
-      inner += `<div class="muted" style="margin-bottom:8px">Scheduled: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. Hannah updates the tracker and systems next.</div>`;
-      if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button><button onclick="startInstall()">Mark in-progress</button></div>`;
+      inner += `<div class="muted" style="margin-bottom:8px">Scheduled: <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}. A project file is open in the PM Room. This card archives itself the day after the scheduled date — or archive it now if the install finished early.</div>`;
+      if(isH) inner += `<div class="row"><button class="primary" onclick="markTracker()">Mark tracker updated</button><button class="red" onclick="completeInstall()">Install done → Archive</button></div>`;
       if(isH && !pp) inner += proposeForm("Re-open with a new date", "Propose new date");
-    }
-    if(st==="in-progress"){
-      inner += `<div class="muted" style="margin-bottom:8px">Install in progress${r.agreed_date?` — <b>${fmtDate(r.agreed_date)}</b> — ${esc(r.agreed_crew||"")}`:""}. When it's done, archive it — it stays on record, nothing is deleted.</div>
-      <div class="row"><button class="red" onclick="completeInstall()">Install completed → Archive</button></div>`;
-    }
-    if(st==="completed"){
-      inner += `<div class="muted" style="margin-bottom:8px">Marked completed. Archive it to file it in the Archive — it stays on record, nothing is deleted.</div>
-      <div class="row"><button class="red" onclick="completeInstall()">Archive</button></div>`;
     }
     inner += `<label>Note for the record</label><textarea id="aNote" placeholder="Add a note to this request's history"></textarea>
       <div class="row" style="margin-top:8px"><button onclick="addNote()">Add note</button></div>`;
@@ -722,8 +758,9 @@ function renderDrawer(){
         <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"—")}</dd>
         <dt>PRODUCT DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"—"}</dd>
         <dt>REQUESTED BY</dt><dd>${esc(r.requested_by||"—")}</dd>
+        ${(r.contact_name||r.contact_phone||r.contact_email)?`<dt>CONTACT</dt><dd>${esc([r.contact_name, r.contact_phone, r.contact_email].filter(Boolean).join(" • "))}</dd>`:""}
         <dt>NOTES</dt><dd>${esc(r.notes||"—")}</dd>
-        ${r.agreed_date?`<dt>AGREED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
+        ${r.agreed_date?`<dt>SCHEDULED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
       </dl>
       ${guideSection(r)}
       ${companycamSection(r)}
@@ -765,7 +802,7 @@ async function submitProposal(){
   const ev = evBase(isCounter ? "countered" : "proposed");
   ev.date = date; ev.crew = crew || null; ev.body = body;
   const cur = normStatus(r.status);
-  const patch = ["completed","subcontracted"].includes(cur) ? null : {status:"ready"};
+  const patch = cur==="subcontracted" ? null : {status:"ready"};
   await addEvent(ev, patch);
   toast(isCounter ? "Counter-proposal sent" : "Date proposed");
 }
@@ -774,12 +811,14 @@ async function approve(){
   const ev = evBase("approved"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Approved as proposed.";
   await addEvent(ev, {status:"scheduled", agreed_date:lp.date, agreed_crew:lp.crew});
   toast("Approved — date agreed");
+  await ensurePmProject(requests.find(x=>x.id===openId));
 }
 async function acceptCounter(){
   const lp = lastProposal(openId); if(!lp) return;
   const ev = evBase("accepted"); ev.date = lp.date; ev.crew = lp.crew; ev.body = "Counter accepted.";
   await addEvent(ev, {status:"scheduled", agreed_date:lp.date, agreed_crew:lp.crew});
   toast("Counter accepted — date agreed");
+  await ensurePmProject(requests.find(x=>x.id===openId));
 }
 async function addNote(){
   const body = document.getElementById("aNote").value.trim();
@@ -881,14 +920,9 @@ async function markTracker(){
   await addEvent(ev, null);
   toast("Marked tracker updated");
 }
-async function startInstall(){
-  const ev = evBase("status"); ev.body = "Install marked in-progress.";
-  await addEvent(ev, {status:"in-progress"});
-  toast("Marked in-progress");
-}
 async function completeInstall(){
   const ev = evBase("completed"); ev.body = "Install completed — moved to the Archive.";
-  await addEvent(ev, {archived:true, status:"completed"});
+  await addEvent(ev, {archived:true, status:"closed"});
   closeDrawer(); showView("archive");
   toast("Archived — on record in the Archive");
 }
@@ -910,6 +944,7 @@ async function setStatus(id, value){
   const ev = evBase("status"); ev.request_id = id;
   ev.body = "Status: " + statusLabel(normStatus(r.status)) + " → " + statusLabel(value) + "." + (value==="closed" ? " Moved to the Archive." : "");
   await addEvent(ev, value==="closed" ? {status:"closed", archived:true} : {status:value});
+  if(value==="scheduled") await ensurePmProject(requests.find(x=>x.id===id));
   if(!drawerOpen) openId = prevOpen;
   toast("Status set to " + statusLabel(value));
 }
@@ -937,6 +972,18 @@ function editSection(r){
     <div class="grid2">
       <div><label>Requested by</label><input type="text" id="eRequester" value="${esc(r.requested_by||"")}"></div>
       <div style="padding-top:22px"><label style="display:inline"><input type="checkbox" id="eHeavy" ${r.heavy?"checked":""} style="width:auto"> Heavy labor</label></div>
+    </div>
+    <div class="grid2">
+      <div><label>Contact name</label><input type="text" id="eContactName" value="${esc(r.contact_name||"")}"></div>
+      <div><label>Contact phone</label><input type="text" id="eContactPhone" value="${esc(r.contact_phone||"")}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Contact email</label><input type="text" id="eContactEmail" value="${esc(r.contact_email||"")}"></div>
+      <div><label>Scheduled date</label><input type="date" id="eSchedDate" value="${r.agreed_date||""}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Scheduled crew</label><input type="text" id="eSchedCrew" value="${esc(r.agreed_crew||"")}" placeholder="Eli / George / Eli + George"></div>
+      <div></div>
     </div>
     <label>Notes</label><textarea id="eNotes">${esc(r.notes||"")}</textarea>
     <div style="margin-top:12px">
@@ -966,6 +1013,11 @@ async function saveEdit(){
     due_date: document.getElementById("eDue").value||null,
     requested_by: document.getElementById("eRequester").value.trim(),
     heavy: document.getElementById("eHeavy").checked,
+    contact_name: document.getElementById("eContactName").value.trim(),
+    contact_phone: document.getElementById("eContactPhone").value.trim(),
+    contact_email: document.getElementById("eContactEmail").value.trim(),
+    agreed_date: document.getElementById("eSchedDate").value || null,
+    agreed_crew: document.getElementById("eSchedCrew").value.trim(),
     notes: document.getElementById("eNotes").value.trim(),
     status: newStatus
   };
@@ -977,6 +1029,7 @@ async function saveEdit(){
   editOpen = false;
   await addEvent(ev, patch);
   toast("Changes saved");
+  if(newStatus==="scheduled") await ensurePmProject(requests.find(x=>x.id===openId));
 }
 
 /* ---------------- New request ---------------- */
