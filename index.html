@@ -56,18 +56,15 @@
   .pill.guide{background:#E2F2E5;border-color:#9CCBA6;color:var(--ok)}
   .pill.ccam{background:#E6F0F5;border-color:#A8C4D4;color:#20506B}
   .card.t-install{border-left-color:#7B2CBF}
-  .card.t-vehicle{border-left-color:#0085CA}
   .card.t-survey{border-left-color:#D96C00}
   .card.t-removal{border-left-color:var(--bad)}
   .pill.field{background:#F1E7FB;border-color:#C9A6EE;color:#5E1FA3}
-  .pill.vehicle{background:#E0F2FA;border-color:#9AD3EE;color:#00679F}
   .pill.survey2{background:#FDEEE0;border-color:#F0C29A;color:#9A4A08}
   .pill.removal{background:#FDECEC;border-color:#F0B4B4;color:var(--bad)}
   .filterbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
   .fchip{display:inline-flex;align-items:center;gap:7px;font-size:13px;padding:6px 12px;border-radius:20px}
   .fchip .dot{width:9px;height:9px;border-radius:50%;background:var(--navy)}
   .fchip[data-f="install"] .dot{background:#7B2CBF}
-  .fchip[data-f="vehicle"] .dot{background:#0085CA}
   .fchip[data-f="survey"] .dot{background:#D96C00}
   .fchip[data-f="removal"] .dot{background:var(--bad)}
   .fchip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -339,7 +336,7 @@
     <div class="hint">Log the request as it came in. Hannah reviews it and proposes a date; Jordan approves or counters on the card.</div>
     <div class="grid2">
       <div><label class="muted">Job #</label><input id="nJob" placeholder="I-CH-97xxx"></div>
-      <div><label class="muted">Type</label><select id="nType"><option value="install">Field install</option><option value="vehicle">Vehicle install</option><option value="survey">Survey</option><option value="removal">Removal</option></select></div>
+      <div><label class="muted">Type</label><select id="nType"><option value="install">Field install</option><option value="survey">Survey</option><option value="removal">Removal</option></select></div>
     </div>
     <label class="muted">Customer</label><input id="nCustomer" placeholder="Customer / site name">
     <label class="muted">Address</label><input id="nAddress" placeholder="Street, City, ST ZIP">
@@ -417,7 +414,6 @@ let editOpen = false;
 let typeFilter = "all";
 const TYPE_META = {
   install:{label:"FIELD INSTALL", pill:"field", card:"t-install"},
-  vehicle:{label:"VEHICLE INSTALL", pill:"vehicle", card:"t-vehicle"},
   survey:{label:"SURVEY", pill:"survey2", card:"t-survey"},
   removal:{label:"REMOVAL", pill:"removal", card:"t-removal"}
 };
@@ -619,10 +615,10 @@ function cardHTML(r){
 }
 function setTypeFilter(f){ typeFilter = f; renderBoard(); }
 function renderFilterBar(){
-  const counts = {all:0, install:0, vehicle:0, survey:0, removal:0};
+  const counts = {all:0, install:0, survey:0, removal:0};
   requests.filter(r=>!r.archived).forEach(r=>{ counts.all++; counts[reqType(r)]++; });
   const chip = (f,label)=>`<button class="fchip ${typeFilter===f?"active":""}" data-f="${f}" onclick="setTypeFilter('${f}')"><span class="dot"></span>${label} <b>${counts[f]||0}</b></button>`;
-  document.getElementById("filterBar").innerHTML = `<span class="muted" style="font-size:13px">Show:</span>` + chip("all","All types") + chip("install","Field installs") + chip("vehicle","Vehicle installs") + chip("survey","Surveys") + chip("removal","Removals");
+  document.getElementById("filterBar").innerHTML = `<span class="muted" style="font-size:13px">Show:</span>` + chip("all","All types") + chip("install","Field installs") + chip("survey","Surveys") + chip("removal","Removals");
 }
 function renderBoard(){
   renderFilterBar();
