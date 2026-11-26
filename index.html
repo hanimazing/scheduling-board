@@ -73,6 +73,22 @@
   .weekgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
   @media (max-width:1100px){.weekgrid{grid-template-columns:repeat(2,1fr)}}
   @media (max-width:640px){.weekgrid{grid-template-columns:1fr}}
+  /* Install calendar (tracker) */
+  .calnav{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .caldow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+  .caldow div{font-size:11px;font-weight:700;color:var(--grey);text-align:center;letter-spacing:.04em}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .calday{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:88px;padding:5px;cursor:pointer}
+  .calday.dim{opacity:.42}
+  .calday.today{border:2px solid var(--navy)}
+  .calday.sel{background:var(--soft);border-color:var(--red)}
+  .calnum{font-size:12px;font-weight:700;margin-bottom:3px}
+  .calchip{font-size:10.5px;line-height:1.25;border-radius:5px;padding:2px 4px;margin-bottom:3px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .calchip.install{background:#7B2CBF}.calchip.survey{background:#D96C00}.calchip.removal{background:#B3261E}
+  .calmore{font-size:10.5px;color:var(--grey)}
+  .caljob{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+  @media (max-width:640px){.calday{min-height:62px}.calchip{font-size:9.5px}}
+
   .day{background:#fff;border:1px solid var(--line);border-radius:10px;min-height:130px;padding:10px}
   .day.today{border-color:var(--red);border-width:2px}
   .day h4{margin:0 0 2px;font-size:13px;color:var(--navy)}
@@ -239,6 +255,7 @@
 <div class="toolbar">
   <button class="viewbtn active" id="btnBoard" onclick="showView('board')">Board</button>
   <button class="viewbtn" id="btnWeek" onclick="showView('week')">Week view</button>
+  <button class="viewbtn" id="btnCalendar" onclick="showView('calendar')">Install calendar</button>
   <button class="viewbtn" id="btnArchive" onclick="showView('archive')">Archive</button>
   <span class="modebadge" id="modeBadge">DEMO MODE — saved on this device only</span>
   <div class="spacer"></div>
@@ -275,6 +292,19 @@
     </div>
     <div class="weekgrid" id="weekGrid"></div>
     <p class="muted" style="margin-top:12px">Only <b>Agreed</b> and <b>Tracker Updated</b> installs appear here. Loads count the installers named on the agreed crew. Days over 8 hours for one installer, and heavy-labor days for Eli, are flagged.</p>
+  </div>
+
+
+  <div id="viewCalendar" class="hidden">
+    <div class="calnav">
+      <button onclick="shiftMonth(-1)">← Prev month</button>
+      <button onclick="shiftMonth(0)">This month</button>
+      <button onclick="shiftMonth(1)">Next month →</button>
+      <strong id="calLabel" style="margin-left:8px"></strong>
+    </div>
+    <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
+    <div class="calgrid" id="calGrid"></div>
+    <div id="calDetail"></div>
   </div>
 
   <div id="viewArchive" class="hidden">
@@ -426,6 +456,7 @@ let actor = localStorage.getItem("sched_actor") || "Hannah";
 let requests = [], events = [];
 let sb = null, session = null;
 let weekOffset = 0, currentView = "board", openId = null;
+let trackerInstalls = [], calOffset = 0, calSelDay = null;
 let pmProjects = [], pmTodos = [], pmNotes = [], pmImages = [];
 let pmLocations = [], pmOrders = [];
 let pmView = "hub", openProjectId = null, pmEditOpen = false;
@@ -502,6 +533,8 @@ async function loadData(){
   const { data: ims } = await sb.from("pm_images").select("*").order("created_at",{ascending:true});
   const { data: locs } = await sb.from("pm_locations").select("*").order("sort",{ascending:true});
   const { data: ords } = await sb.from("pm_orders").select("*").order("created_at",{ascending:true});
+  const { data: tinst } = await sb.from("tracker_installs").select("*").order("install_date",{ascending:true});
+  trackerInstalls = tinst||[];
   pmProjects = projs||[]; pmTodos = tds||[]; pmNotes = nts||[]; pmImages = ims||[];
   pmLocations = locs||[]; pmOrders = ords||[];
   render(); renderPm(); if(openProjectId) renderProject(); if(openLocationId) renderLocation(); if(openOrderId) renderOrder();
@@ -599,15 +632,17 @@ function goLobby(){ closeDrawer(); showScreen("lobby"); }
 /* ---------------- Views ---------------- */
 function showView(v){
   currentView = v;
-  ["Board","Week","Archive"].forEach(x=>document.getElementById("btn"+x).classList.toggle("active", x.toLowerCase()===v));
+  ["Board","Week","Calendar","Archive"].forEach(x=>document.getElementById("btn"+x).classList.toggle("active", x.toLowerCase()===v));
   document.getElementById("viewBoard").classList.toggle("hidden", v!=="board");
   document.getElementById("viewWeek").classList.toggle("hidden", v!=="week");
+  document.getElementById("viewCalendar").classList.toggle("hidden", v!=="calendar");
   document.getElementById("viewArchive").classList.toggle("hidden", v!=="archive");
   render();
 }
 function render(){
   if(currentView==="board") renderBoard();
   if(currentView==="week") renderWeek();
+  if(currentView==="calendar") renderCalendar();
   if(currentView==="archive") renderArchive();
 }
 function duePill(r){
@@ -688,6 +723,51 @@ function renderWeek(){
     </div>`;
   }).join("");
 }
+
+/* ---------------- Install calendar (from the Install Tracker) ---------------- */
+function shiftMonth(n){ calOffset = n===0 ? 0 : calOffset + n; renderCalendar(); }
+function renderCalendar(){
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth()+calOffset, 1);
+  document.getElementById("calLabel").textContent = start.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  const firstDow = (start.getDay()+6)%7;
+  const gridStart = new Date(start); gridStart.setDate(start.getDate()-firstDow);
+  const p2 = n=>String(n).padStart(2,"0");
+  const iso = d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
+  const todayIso = iso(new Date());
+  const byDay = {};
+  trackerInstalls.forEach(t=>{ (byDay[t.install_date] = byDay[t.install_date]||[]).push(t); });
+  document.getElementById("calGrid").innerHTML = [...Array(42)].map((_,i)=>{
+    const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+    const di = iso(d), inMonth = d.getMonth()===start.getMonth();
+    const jobs = byDay[di]||[];
+    const chips = jobs.slice(0,3).map(t=>`<div class="calchip ${t.type_key||"install"}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
+    const more = jobs.length>3 ? `<div class="calmore">+${jobs.length-3} more</div>` : "";
+    return `<div class="calday ${inMonth?"":"dim"} ${di===todayIso?"today":""} ${di===calSelDay?"sel":""}" onclick="selectCalDay('${di}')"><div class="calnum">${d.getDate()}</div>${chips}${more}</div>`;
+  }).join("");
+  renderCalDetail();
+}
+function selectCalDay(di){ calSelDay = di; renderCalendar(); }
+function renderCalDetail(){
+  const box = document.getElementById("calDetail");
+  if(!box) return;
+  if(!calSelDay){ box.innerHTML = `<p class="muted" style="margin-top:12px">Click a day to see its installs. This calendar mirrors the Install Tracker and refreshes with every tracker scan (weekday mornings, and every 30 minutes Mon–Fri 8–6). Vehicle installs are not shown.</p>`; return; }
+  const jobs = trackerInstalls.filter(t=>t.install_date===calSelDay);
+  const dstr = new Date(calSelDay+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+  if(!jobs.length){ box.innerHTML = `<h3 style="margin:14px 0 6px">${dstr}</h3><div class="muted">No installs on the tracker for this day.</div>`; return; }
+  box.innerHTML = `<h3 style="margin:14px 0 6px">${dstr} — ${jobs.length} install${jobs.length>1?"s":""}</h3>` + jobs.map(t=>{
+    const core = (t.order_number||"").replace(/\D/g,"");
+    const card = core ? requests.find(r=>(r.job_number||"").replace(/\D/g,"")===core && !r.archived) : null;
+    const meta = [t.crew?("Crew: "+esc(t.crew)):"", t.hours!=null?esc(t.hours)+" hrs":"", t.address?esc(t.address):""].filter(Boolean).join(" • ");
+    return `<div class="caljob">
+      <div><b>${esc(t.order_number||"—")}</b> — ${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""} <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
+      ${meta?`<div class="muted">${meta}</div>`:""}
+      ${t.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:4px">${esc(String(t.scope).slice(0,400))}${String(t.scope).length>400?"…":""}</div>`:""}
+      ${card?`<div style="margin-top:6px"><button class="small" onclick="openDrawer('${card.id}')">Open in Scheduling →</button></div>`:""}
+    </div>`;
+  }).join("");
+}
+
 function renderArchive(){
   const items = requests.filter(r=>r.archived).sort((a,b)=>(a.agreed_date||"")<(b.agreed_date||"")?1:-1);
   document.getElementById("archiveList").innerHTML = items.length ? items.map(r=>`
