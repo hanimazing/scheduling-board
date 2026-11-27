@@ -90,6 +90,33 @@
   .calcrew{display:inline-block;padding:1px 8px;border-radius:99px;color:#fff;font-size:11px;font-weight:700}
   .calmore{font-size:10.5px;color:var(--grey)}
   .caljob{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+  /* Calendar job card (modal) */
+  .caloverlay{position:fixed;inset:0;background:rgba(10,37,64,.55);z-index:90;overflow:auto;padding:22px 12px;display:flex;justify-content:center;align-items:flex-start}
+  .calmodal{background:#fff;border-radius:14px;max-width:740px;width:100%;padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+  .calmhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .calkv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin:10px 0}
+  .calkv .k{font-size:11px;font-weight:700;color:var(--grey);letter-spacing:.04em}
+  .calkv .v{font-size:14px}
+  .calimgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:8px}
+  .calimgs a{display:block;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
+  .calimgs img{width:100%;height:82px;object-fit:cover;display:block}
+  .calfiletile{display:flex;flex-direction:column;align-items:center;justify-content:center;height:82px;gap:4px;color:var(--ink);font-size:11px;text-align:center;padding:4px}
+  .calfiletile .ext{font-weight:800;font-size:13px;color:var(--navy)}
+  .calprod{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--soft);font-size:13px}
+  .pill.cb{background:#E8EEF7;border-color:#A9BEDD;color:#0F4C81}
+  .pill.env{background:#EDF3E4;border-color:#B9CFA0;color:#3E6216}
+  .pill.dig{background:#FBEEDC;border-color:#EBCB96;color:#8A5A00}
+  .calchip.prop{opacity:.55;outline:1.5px dashed rgba(255,255,255,.9);outline-offset:-3px}
+  .calwx{font-size:10px;color:var(--grey);margin:0 0 3px;white-space:nowrap;overflow:hidden}
+  .kv input[type=text],.kv input[type=number],.kv input[type=date],.kv select,.kv textarea{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13.5px;background:#fff;box-sizing:border-box}
+  .kv textarea{min-height:52px}
+  .datewrap{display:flex;gap:6px;align-items:stretch}
+  .datewrap input{flex:1}
+  .calbtn{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:0 10px;cursor:pointer;font-size:15px}
+  .trkgroup{margin-bottom:18px}
+  .trkcard{border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:10px;padding:9px 12px;margin-bottom:7px;background:var(--card)}
+
+
   @media (max-width:640px){.calday{min-height:62px}.calchip{font-size:9.5px}}
 
   .day{background:#fff;border:1px solid var(--line);border-radius:10px;min-height:130px;padding:10px}
@@ -231,8 +258,10 @@
         <div class="rdesc">Install scheduling — requests, date proposals and decisions between Hannah Ewing and Jordan Blake.</div>
         <div class="rgo">Enter →</div>
       </div>
-      <div class="roomcard soon">
-        <div class="rname">Coming Soon</div>
+      <div class="roomcard live" onclick="enterTracker()">
+        <div class="rname">The Tracker</div>
+        <div class="rdesc">The live installation tracker, upgraded — scheduled jobs on a calendar up top, everything else organized by status below. No vehicle installs.</div>
+        <div class="rgo">Enter →</div>
       </div>
       <div class="roomcard live" onclick="enterPm()">
         <div class="rname">Project Management</div>
@@ -302,7 +331,7 @@
     <div class="calnav">
       <strong id="calLabel"></strong>
     </div>
-    <div class="callegend"><span><span class="dot cc-eli"></span>Eli</span><span><span class="dot cc-george"></span>George</span><span><span class="dot cc-both"></span>Eli + George</span><span><span class="dot cc-other"></span>Other / unassigned</span></div>
+    <div class="callegend"><span><span class="dot cc-eli"></span>Eli</span><span><span class="dot cc-george"></span>George</span><span><span class="dot cc-both"></span>Eli + George</span><span><span class="dot cc-other"></span>Other / unassigned</span><span><span class="dot cc-other" style="opacity:.55"></span>Proposed (awaiting approval)</span></div>
     <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
     <div class="calgrid" id="calGrid"></div>
     <div id="calDetail"></div>
@@ -380,8 +409,29 @@
 </main>
 </div><!-- /screenOrder -->
 
+<div id="screenTracker" class="hidden">
+<div class="roombanner">
+  <button class="small" onclick="goLobby()">← Lobby</button>
+  <div>
+    <div class="rtitle">THE TRACKER</div>
+    <div class="rsub">Live from the installation tracker — scheduled jobs on the calendar, the rest by status. Vehicle installs are not shown.</div>
+  </div>
+</div>
+<main>
+  <div class="calnav"><strong id="trkCalLabel"></strong><div class="spacer"></div><button onclick="refreshData()">↻ Refresh</button></div>
+  <div class="callegend"><span><span class="dot cc-eli"></span>Eli</span><span><span class="dot cc-george"></span>George</span><span><span class="dot cc-both"></span>Eli + George</span><span><span class="dot cc-other"></span>Other / unassigned</span><span><span class="dot cc-other" style="opacity:.55"></span>Proposed (awaiting approval)</span></div>
+  <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
+  <div class="calgrid" id="trkCalGrid"></div>
+  <div id="trkDetail"></div>
+  <h3 style="margin:26px 0 4px;color:var(--navy)">REMAINING JOBS — BY STATUS</h3>
+  <p class="muted" style="margin:0 0 12px">Every job on the tracker that doesn't have a set install date yet — grouped by its tracker status. This page refreshes with every tracker scan (weekday mornings, and every 30 minutes Mon\u2013Fri 8\u20136).</p>
+  <div id="trkGroups"></div>
+</main>
+</div><!-- /screenTracker -->
+
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
 <aside class="drawer" id="drawer"></aside>
+<div id="calModal"></div>
 
 <div class="modal" id="newModal">
   <div class="sheet">
@@ -398,10 +448,15 @@
       <div><label class="muted">Est. hours</label><input id="nHours" type="number" step="0.25" min="0" placeholder="1.5"></div>
       <div><label class="muted">Product due date (if any)</label><input id="nDue" type="date"></div>
     </div>
-    <label class="muted">Crew needed</label><input id="nCrew" placeholder="Eli / George / Eli + George / Eli + MZ">
+    <label class="muted">Crew needed</label><select id="nCrew"><option value="">— pick crew —</option><option>George</option><option>Eli</option><option value="Eli + George">Both</option><option>Zieber</option><option>Oliver</option><option>Other</option></select>
     <label class="muted">Requested by</label><input id="nRequester" placeholder="Rep or contact who sent the request">
     <label class="muted">Constraints / notes</label><textarea id="nNotes" placeholder="Product readiness, customer availability, permit status, anything that affects the date"></textarea>
     <label class="checkline"><input type="checkbox" id="nHeavy"> Heavy labor (digging, post &amp; panel, heavy lifts) — flags Eli's load</label>
+    <div class="grid2">
+      <div><label class="muted">Site</label><select id="nEnv"><option value="">— not set —</option><option>Indoor</option><option>Outdoor</option><option>Indoor + Outdoor</option></select></div>
+      <div style="padding-top:22px"><label class="checkline"><input type="checkbox" id="nDig"> Digging required</label></div>
+    </div>
+    <label class="muted">CoreBridge order link (optional)</label><input id="nCb" placeholder="Paste the CoreBridge order link">
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="primary" onclick="createRequest()">Add request</button>
       <button onclick="closeNew()">Cancel</button>
@@ -464,6 +519,8 @@ let pmView = "hub", openProjectId = null, pmEditOpen = false;
 let openLocationId = null, openOrderId = null, pmLocEditOpen = false, pmOrdEditOpen = false;
 let guideEditOpen = false;
 let ccamEditOpen = false;
+let cbEditOpen = false;
+let trackerRows = [], wxByDate = {}, wxLoaded = false, trkSelDay = null;
 let editOpen = false;
 let typeFilter = "all";
 const TYPE_META = {
@@ -536,9 +593,12 @@ async function loadData(){
   const { data: ords } = await sb.from("pm_orders").select("*").order("created_at",{ascending:true});
   const { data: tinst } = await sb.from("tracker_installs").select("*").order("install_date",{ascending:true});
   trackerInstalls = tinst||[];
+  const { data: trows } = await sb.from("tracker_rows").select("*").order("row_index",{ascending:true});
+  trackerRows = trows||[];
   pmProjects = projs||[]; pmTodos = tds||[]; pmNotes = nts||[]; pmImages = ims||[];
   pmLocations = locs||[]; pmOrders = ords||[];
   render(); renderPm(); if(openProjectId) renderProject(); if(openLocationId) renderLocation(); if(openOrderId) renderOrder();
+  const tsc = document.getElementById("screenTracker"); if(tsc && !tsc.classList.contains("hidden")) renderTracker();
 }
 async function addRequest(r, ev){
   if(!SHARED){ requests.push(r); events.push(ev); saveLocal(); render(); return; }
@@ -626,7 +686,9 @@ function showScreen(name){
   document.getElementById("screenProject").classList.toggle("hidden", name!=="project");
   document.getElementById("screenLocation").classList.toggle("hidden", name!=="location");
   document.getElementById("screenOrder").classList.toggle("hidden", name!=="order");
+  document.getElementById("screenTracker").classList.toggle("hidden", name!=="tracker");
 }
+function enterTracker(){ showScreen("tracker"); renderTracker(); loadWeather(); }
 function enterRoom(){ showScreen("room"); showView("board"); }
 function goLobby(){ closeDrawer(); showScreen("lobby"); }
 
@@ -667,7 +729,7 @@ function cardHTML(r){
     ${r.cover_url ? `<img class="coverimg" src="${esc(r.cover_url)}" alt="">` : ""}
     <div class="job">${esc(r.job_number||"—")}</div>
     <div class="cust">${esc(r.customer||"")}</div>
-    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">JOB FILES</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
+    <div class="meta"><span class="pill ${typeMeta(r.type).pill}">${typeMeta(r.type).label}</span> ${r.heavy?`<span class="pill heavy">HEAVY LABOR</span> `:""}${r.guide_url?`<span class="pill guide">JOB FILES</span> `:""}${r.companycam_url?`<span class="pill ccam">COMPANYCAM</span> `:""}${r.corebridge_url?`<a href="${esc(r.corebridge_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="pill cb">COREBRIDGE</span></a> `:""}${r.site_env?`<span class="pill env">${esc(r.site_env.toUpperCase())}</span> `:""}${r.digging?`<span class="pill dig">DIGGING</span> `:""}${r.hours!=null&&r.hours!==""?esc(r.hours)+" hrs":""}${r.crew_needed?" • crew: "+esc(r.crew_needed):""}${duePill(r)}</div>
     ${dateLine}${lastTxt}
     ${isEditor() && !r.archived ? `<select class="statusbar" onclick="event.stopPropagation()" onchange="quickStatus('${r.id}', this.value)">${STATUSES.map(s=>`<option value="${s.id}" ${normStatus(r.status)===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("")}<option value="closed" ${normStatus(r.status)==="closed"?"selected":""}>Closed & Archived</option></select>` : ""}
   </div>`;
@@ -728,7 +790,82 @@ function renderWeek(){
 /* ---------------- Install calendar (from the Install Tracker) ---------------- */
 function crewClass(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "cc-both"; if(e) return "cc-eli"; if(g) return "cc-george"; return "cc-other"; }
 function crewLabel(t){ const c=(t.crew||"").toLowerCase(); const e=c.includes("eli"), g=c.includes("george"); if(e&&g) return "Eli + George"; if(e) return "Eli"; if(g) return "George"; return t.crew || "Unassigned"; }
+const CREW_OPTIONS = ["George","Eli","Both","Zieber","Oliver","Other"];
+function crewSelOf(current){
+  const c = (current||"").trim(), low = c.toLowerCase();
+  if(!c) return "";
+  if(low==="eli") return "Eli";
+  if(low==="george") return "George";
+  if((low.includes("eli")&&low.includes("george"))||low==="both") return "Both";
+  if(low.includes("zieber")||low==="mz"||low.includes("mike")) return "Zieber";
+  if(low.includes("oliver")) return "Oliver";
+  return "__raw";
+}
+function crewSelectHTML(id, current){
+  const sel = crewSelOf(current);
+  const blank = `<option value="" ${sel===""?"selected":""}>— pick crew —</option>`;
+  const opts = CREW_OPTIONS.map(o=>`<option value="${o}" ${sel===o?"selected":""}>${o}</option>`).join("");
+  const raw = sel==="__raw" ? `<option value="${esc(current)}" selected>${esc(current)}</option>` : "";
+  return `<select id="${id}">${blank}${opts}${raw}</select>`;
+}
+function crewValue(id){ const el = document.getElementById(id); if(!el) return ""; return el.value==="Both" ? "Eli + George" : el.value; }
+function dateFieldHTML(id, val){
+  return `<span class="datewrap"><input type="date" id="${id}" value="${val||""}"><button type="button" class="calbtn" title="Pick a date" onclick="var i=document.getElementById('${id}'); if(i.showPicker) i.showPicker(); else i.focus();">\u{1F4C5}</button></span>`;
+}
+/* Weather (Open-Meteo, Charlotte NC) — icon + high/low °F for each calendar day */
+async function loadWeather(){
+  if(wxLoaded) return; wxLoaded = true;
+  try{
+    const j = await (await fetch("https://api.open-meteo.com/v1/forecast?latitude=35.2271&longitude=-80.8431&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=16")).json();
+    const d = j.daily||{};
+    (d.time||[]).forEach((t,i)=>{ wxByDate[t] = {code:d.weather_code[i], hi:Math.round(d.temperature_2m_max[i]), lo:Math.round(d.temperature_2m_min[i])}; });
+    if(currentView==="calendar") renderCalendar();
+    const ts = document.getElementById("screenTracker");
+    if(ts && !ts.classList.contains("hidden")) renderTracker();
+  }catch(e){ /* weather is a nice-to-have; the calendars work without it */ }
+}
+function wxIcon(code){
+  if(code===0) return "\u2600\uFE0F";
+  if(code===1) return "\u{1F324}\uFE0F";
+  if(code===2) return "\u26C5";
+  if(code===3) return "\u2601\uFE0F";
+  if(code===45||code===48) return "\u{1F32B}\uFE0F";
+  if(code>=51&&code<=57) return "\u{1F326}\uFE0F";
+  if(code>=61&&code<=67) return "\u{1F327}\uFE0F";
+  if((code>=71&&code<=77)||code===85||code===86) return "\u2744\uFE0F";
+  if(code>=80&&code<=82) return "\u{1F326}\uFE0F";
+  if(code>=95) return "\u26C8\uFE0F";
+  return "\u{1F321}\uFE0F";
+}
+function wxHTML(iso){
+  const w = wxByDate[iso]; if(!w) return "";
+  return `<div class="calwx">${wxIcon(w.code)} ${w.hi}° / ${w.lo}°</div>`;
+}
+function calDayMap(){
+  const byDay = {};
+  const push = (d, e)=>{ if(d) (byDay[d] = byDay[d]||[]).push(e); };
+  trackerInstalls.forEach(t=>push(t.install_date, {kind:"trk", t}));
+  requests.filter(r=>!r.archived).forEach(r=>{
+    if(normStatus(r.status)==="scheduled" && r.agreed_date){
+      const core = digitRuns(r.job_number)[0]||"";
+      const dup = core && trackerInstalls.some(t=>t.install_date===r.agreed_date && digitRuns(t.order_number).includes(core));
+      if(!dup) push(r.agreed_date, {kind:"sched", r});
+    } else {
+      const pp = pendingProposal(r.id);
+      if(pp && pp.date) push(pp.date, {kind:"prop", r, pp});
+    }
+  });
+  Object.values(byDay).forEach(list=>list.sort((a,b)=>(a.kind==="prop"?1:0)-(b.kind==="prop"?1:0)));
+  return byDay;
+}
+function calChipHTML(e){
+  if(e.kind==="trk"){ const t = e.t; return `<div class="calchip ${crewClass(t)}" onclick="event.stopPropagation();openCalJob(${trackerInstalls.indexOf(t)})">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`; }
+  if(e.kind==="sched"){ const r = e.r; return `<div class="calchip ${crewClass({crew:r.agreed_crew})}" onclick="event.stopPropagation();openDrawer('${r.id}')">${esc(r.job_number||"")} ${esc((r.customer||"").split(" ").slice(0,2).join(" "))}</div>`; }
+  const r = e.r; return `<div class="calchip prop ${crewClass({crew:e.pp.crew||r.crew_needed})}" title="Proposed — awaiting approval" onclick="event.stopPropagation();openDrawer('${r.id}')">${esc(r.job_number||"")} ${esc((r.customer||"").split(" ").slice(0,2).join(" "))} · proposed</div>`;
+}
+
 function renderCalendar(){
+  loadWeather();
   const mon = mondayOf(0);
   const end = new Date(mon); end.setDate(mon.getDate()+41);
   const lbl = d => d.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
@@ -737,15 +874,14 @@ function renderCalendar(){
   const iso = d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
   const todayIso = iso(new Date());
   if(!calSelDay) calSelDay = todayIso;
-  const byDay = {};
-  trackerInstalls.forEach(t=>{ (byDay[t.install_date] = byDay[t.install_date]||[]).push(t); });
+  const byDay = calDayMap();
   document.getElementById("calGrid").innerHTML = [...Array(42)].map((_,i)=>{
     const d = new Date(mon); d.setDate(mon.getDate()+i);
     const di = iso(d);
     const jobs = byDay[di]||[];
-    const chips = jobs.slice(0,3).map(t=>`<div class="calchip ${crewClass(t)}" onclick="event.stopPropagation();selectCalDay('${di}')">${esc(t.order_number||"")} ${esc((t.customer||"").split(" ").slice(0,2).join(" "))}</div>`).join("");
+    const chips = jobs.slice(0,3).map(calChipHTML).join("");
     const more = jobs.length>3 ? `<div class="calmore">+${jobs.length-3} more</div>` : "";
-    return `<div class="calday ${di===todayIso?"today":""} ${di===calSelDay?"sel":""}" onclick="selectCalDay('${di}')"><div class="calnum">${d.getDate()}</div>${chips}${more}</div>`;
+    return `<div class="calday ${di===todayIso?"today":""} ${di===calSelDay?"sel":""}" onclick="selectCalDay('${di}')"><div class="calnum">${d.getDate()}</div>${wxHTML(di)}${chips}${more}</div>`;
   }).join("");
   renderCalDetail();
 }
@@ -753,21 +889,144 @@ function selectCalDay(di){ calSelDay = di; renderCalendar(); }
 function renderCalDetail(){
   const box = document.getElementById("calDetail");
   if(!box) return;
-  if(!calSelDay){ box.innerHTML = `<p class="muted" style="margin-top:12px">Click a day to see its installs. This calendar mirrors the Install Tracker and refreshes with every tracker scan (weekday mornings, and every 30 minutes Mon–Fri 8–6). Vehicle installs are not shown.</p>`; return; }
-  const jobs = trackerInstalls.filter(t=>t.install_date===calSelDay);
-  const dstr = new Date(calSelDay+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
-  if(!jobs.length){ box.innerHTML = `<h3 style="margin:14px 0 6px">${dstr}</h3><div class="muted">No installs on the tracker for this day.</div>`; return; }
-  box.innerHTML = `<h3 style="margin:14px 0 6px">${dstr} — ${jobs.length} install${jobs.length>1?"s":""}</h3>` + jobs.map(t=>{
+  if(!calSelDay){ box.innerHTML = `<p class="muted" style="margin-top:12px">Click a day to see its installs. This calendar mirrors the Install Tracker and refreshes with every tracker scan (weekday mornings, and every 30 minutes Mon\u2013Fri 8\u20136). Vehicle installs are not shown.</p>`; return; }
+  box.innerHTML = calDayDetailHTML(calSelDay);
+}
+function calDayDetailHTML(dayIso){
+  const jobs = trackerInstalls.filter(t=>t.install_date===dayIso);
+  const board = (calDayMap()[dayIso]||[]).filter(e=>e.kind!=="trk");
+  const dstr = new Date(dayIso+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+  const w = wxByDate[dayIso];
+  const wxLine = w ? `<div class="muted" style="margin-bottom:8px">${wxIcon(w.code)} ${w.hi}\u00B0F / ${w.lo}\u00B0F \u2014 Charlotte forecast for this day</div>` : "";
+  const total = jobs.length + board.length;
+  if(!total) return `<h3 style="margin:14px 0 6px">${dstr}</h3>${wxLine}<div class="muted">No installs on the tracker for this day.</div>`;
+  let html = `<h3 style="margin:14px 0 6px">${dstr} \u2014 ${total} install${total>1?"s":""}</h3>${wxLine}` + jobs.map(t=>{
     const core = (t.order_number||"").replace(/\D/g,"");
     const card = core ? requests.find(r=>(r.job_number||"").replace(/\D/g,"")===core && !r.archived) : null;
-    const meta = [t.crew?("Crew: "+esc(t.crew)):"", t.hours!=null?esc(t.hours)+" hrs":"", t.address?esc(t.address):""].filter(Boolean).join(" • ");
-    return `<div class="caljob">
-      <div><b>${esc(t.order_number||"—")}</b> — ${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""} <span class="calcrew ${crewClass(t)}">${esc(crewLabel(t))}</span> <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
+    const meta = [t.crew?("Crew: "+esc(t.crew)):"", t.hours!=null?esc(t.hours)+" hrs":"", t.address?esc(t.address):""].filter(Boolean).join(" \u2022 ");
+    return `<div class="caljob" style="cursor:pointer" onclick="openCalJob(${trackerInstalls.indexOf(t)})">
+      <div><b>${esc(t.order_number||"\u2014")}</b> \u2014 ${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""} <span class="calcrew ${crewClass(t)}">${esc(crewLabel(t))}</span> <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
       ${meta?`<div class="muted">${meta}</div>`:""}
-      ${t.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:4px">${esc(String(t.scope).slice(0,400))}${String(t.scope).length>400?"…":""}</div>`:""}
-      ${card?`<div style="margin-top:6px"><button class="small" onclick="openDrawer('${card.id}')">Open in Scheduling →</button></div>`:""}
+      ${t.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:4px">${esc(String(t.scope).slice(0,400))}${String(t.scope).length>400?"\u2026":""}</div>`:""}
+      ${card?`<div style="margin-top:6px"><button class="small" onclick="event.stopPropagation();openDrawer('${card.id}')">Open in Scheduling \u2192</button></div>`:""}
     </div>`;
   }).join("");
+  html += board.map(e=>{
+    const r = e.r;
+    if(e.kind==="sched") return `<div class="caljob">
+      <div><b>${esc(r.job_number||"\u2014")}</b> \u2014 ${esc(r.customer||"")} <span class="calcrew ${crewClass({crew:r.agreed_crew})}">${esc(crewLabel({crew:r.agreed_crew}))}</span> <span class="pill">Scheduled on the board</span></div>
+      ${r.address?`<div class="muted">${esc(r.address)}</div>`:""}
+      <div style="margin-top:6px"><button class="small" onclick="openDrawer('${r.id}')">Open in Scheduling \u2192</button></div></div>`;
+    return `<div class="caljob" style="opacity:.8;border-style:dashed">
+      <div><b>${esc(r.job_number||"\u2014")}</b> \u2014 ${esc(r.customer||"")} <span class="calcrew ${crewClass({crew:e.pp.crew||r.crew_needed})}" style="opacity:.6">${esc(crewLabel({crew:e.pp.crew||r.crew_needed}))}</span> <span class="pill">PROPOSED \u2014 awaiting approval</span></div>
+      <div class="muted">Proposed by ${esc(e.pp.actor)}${e.pp.crew?" \u2014 crew: "+esc(e.pp.crew):""}. Once it is approved it turns solid here, scheduled on this date in the installer's color.</div>
+      <div style="margin-top:6px"><button class="small" onclick="openDrawer('${r.id}')">Open card \u2192</button></div></div>`;
+  }).join("");
+  return html;
+}
+
+/* ---------------- The Tracker page ---------------- */
+function selectTrkDay(di){ trkSelDay = di; renderTracker(); }
+function renderTracker(){
+  loadWeather();
+  const mon = mondayOf(0);
+  const end = new Date(mon); end.setDate(mon.getDate()+41);
+  const lbl = d => d.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+  const lblEl = document.getElementById("trkCalLabel"); if(lblEl) lblEl.textContent = "Scheduled \u2014 " + lbl(mon) + " \u2013 " + lbl(end) + "  (6 weeks)";
+  const p2 = n=>String(n).padStart(2,"0");
+  const iso = d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
+  const todayIso = iso(new Date());
+  if(!trkSelDay) trkSelDay = todayIso;
+  const byDay = calDayMap();
+  const grid = document.getElementById("trkCalGrid");
+  if(grid) grid.innerHTML = [...Array(42)].map((_,i)=>{
+    const d = new Date(mon); d.setDate(mon.getDate()+i);
+    const di = iso(d);
+    const jobs = byDay[di]||[];
+    const chips = jobs.slice(0,3).map(calChipHTML).join("");
+    const more = jobs.length>3 ? `<div class="calmore">+${jobs.length-3} more</div>` : "";
+    return `<div class="calday ${di===todayIso?"today":""} ${di===trkSelDay?"sel":""}" onclick="selectTrkDay('${di}')"><div class="calnum">${d.getDate()}</div>${wxHTML(di)}${chips}${more}</div>`;
+  }).join("");
+  const det = document.getElementById("trkDetail");
+  if(det) det.innerHTML = calDayDetailHTML(trkSelDay);
+  const rest = trackerRows.filter(r=>!r.install_date);
+  const order = ["NEW","Pre-planning","Planning","Scheduled","On Hold","Completed"];
+  const groups = {};
+  rest.forEach(r=>{ const s = (r.status||"").trim(); (groups[s] = groups[s]||[]).push(r); });
+  const keys = Object.keys(groups).sort((a,b)=>{
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia<0?50:ia) - (ib<0?50:ib) || a.localeCompare(b);
+  });
+  const gel = document.getElementById("trkGroups");
+  if(gel) gel.innerHTML = keys.length ? keys.map(k=>`
+    <div class="trkgroup"><h4 style="margin:0 0 8px;color:var(--navy)">${esc(k||"NO STATUS")} <span class="count">${groups[k].length}</span></h4>
+    ${groups[k].map(trkRowHTML).join("")}</div>`).join("")
+    : `<div class="empty">Nothing else on the tracker right now.</div>`;
+}
+function trkRowHTML(r){
+  const meta = [r.rep?("Rep: "+esc(r.rep)):"", r.crew?("Crew: "+esc(r.crew)):"", r.hours!=null?esc(r.hours)+" hrs":"", r.priority?("Priority: "+esc(r.priority)):"", r.int_ext?esc(r.int_ext):"", r.product_status?("Product: "+esc(r.product_status)):"", r.site_status?("Site: "+esc(r.site_status)):"", r.due_date?("CB due "+fmtDate(r.due_date)):"", r.date_text?("Date note: "+esc(r.date_text)):""].filter(Boolean).join(" \u2022 ");
+  return `<div class="trkcard">
+    <div><b>${esc(r.order_number||"\u2014")}</b> \u2014 ${esc(r.customer||"")}${r.leg?` <span class="muted">(${esc(r.leg)})</span>`:""} <span class="pill ${typeMeta(r.type_key||"install").pill}">${typeMeta(r.type_key||"install").label}</span>${r.status?` <span class="pill">${esc(r.status)}</span>`:""}</div>
+    ${meta?`<div class="muted">${meta}</div>`:""}
+    ${r.address?`<div class="muted">${esc(r.address)}</div>`:""}
+    ${r.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:3px">${esc(String(r.scope).slice(0,300))}${String(r.scope).length>300?"\u2026":""}</div>`:""}
+  </div>`;
+}
+
+/* ---------------- Calendar job card ---------------- */
+function digitRuns(s){ return (s||"").match(/\d{4,}/g) || []; }
+function closeCalJob(){ const m = document.getElementById("calModal"); if(m) m.innerHTML = ""; }
+function openCalJob(idx){
+  const t = trackerInstalls[idx];
+  if(!t) return;
+  calSelDay = t.install_date;
+  const core = digitRuns(t.order_number)[0] || "";
+  const proj = core ? pmProjects.find(p=>digitRuns(p.job_number).includes(core))
+                    : pmProjects.find(p=>(p.customer||"").toLowerCase().trim()===(t.customer||"").toLowerCase().trim() && t.customer);
+  const ord = core ? pmOrders.find(o=>digitRuns(o.order_number).includes(core)) : null;
+  const card = core ? requests.find(r=>digitRuns(r.job_number).includes(core) && !r.archived) : null;
+  const imgs = proj ? pmImages.filter(i=>i.project_id===proj.id) : [];
+  const money = v => v!=null && v!=="" ? "$" + Number(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : "";
+  const dstr = new Date(t.install_date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+  const kv = (k,v)=> v ? `<div><div class="k">${k}</div><div class="v">${v}</div></div>` : "";
+  const imgHTML = imgs.slice(0,24).map(im=>{
+    if(fileKind(im.name, im.url)==="image") return `<a href="${esc(im.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(im.url)}" alt="${esc(im.name||"")}"></a>`;
+    return `<a href="${esc(im.url)}" target="_blank" rel="noopener"><span class="calfiletile"><span class="ext">${esc(fileExt(im.name, im.url)||"FILE")}</span><span>${esc((im.name||"").slice(0,40))}</span></span></a>`;
+  }).join("");
+  document.getElementById("calModal").innerHTML = `<div class="caloverlay" onclick="if(event.target===this) closeCalJob()">
+    <div class="calmodal">
+      <div class="calmhead">
+        <div><div class="job" style="font-size:19px">${esc(t.order_number||"—")}</div><div class="cust" style="font-size:15px">${esc(t.customer||"")}${t.leg?` <span class="muted">(${esc(t.leg)})</span>`:""}</div></div>
+        <button class="small" onclick="closeCalJob()">✕ Close</button>
+      </div>
+      <div style="margin:8px 0 2px"><b>${dstr}</b> <span class="calcrew ${crewClass(t)}">${esc(crewLabel(t))}</span> <span class="pill ${typeMeta(t.type_key||"install").pill}">${typeMeta(t.type_key||"install").label}</span>${t.status?` <span class="pill">${esc(t.status)}</span>`:""}${t.priority?` <span class="pill">Priority: ${esc(t.priority)}</span>`:""}</div>
+      <div class="calkv">
+        ${kv("CREW", esc(t.crew||""))}
+        ${kv("HOURS", t.hours!=null ? esc(t.hours) : "")}
+        ${kv("PRODUCT (TRACKER)", esc(t.product_status||""))}
+        ${kv("REP", esc(t.rep||""))}
+        ${kv("ADDRESS", esc(t.address||""))}
+      </div>
+      ${t.scope?`<div class="muted" style="white-space:pre-wrap;margin:6px 0">${esc(String(t.scope).slice(0,900))}${String(t.scope).length>900?"…":""}</div>`:""}
+      ${ord?`<div style="margin-top:12px"><h4 style="margin:0 0 4px">CoreBridge</h4>
+        <div class="calkv">
+          ${kv("ORDER STATUS", esc(ord.cb_status||""))}
+          ${kv("PRODUCT DUE", ord.due_date ? esc(fmtDate(ord.due_date)) : "")}
+          ${kv("ORDER TOTAL", money(ord.total))}
+          ${kv("BALANCE", money(ord.balance))}
+          ${kv("TRACKER STATUS", esc(ord.tracker_status||""))}
+        </div>
+        ${(ord.products||[]).length?`<div>${ord.products.map(p=>`<div class="calprod"><span>${esc(p.name||"")}</span><span class="muted">${esc(p.due||"")}${p.status?" • "+esc(p.status):""}</span></div>`).join("")}</div>`:""}
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          ${ord.jobfiles_url?`<a href="${esc(ord.jobfiles_url)}" target="_blank" rel="noopener"><button class="small">Job Files (WO + proofs)</button></a>`:""}
+          ${ord.companycam_url?`<a href="${esc(ord.companycam_url)}" target="_blank" rel="noopener"><button class="small">Open in CompanyCam</button></a>`:""}
+        </div></div>`:""}
+      ${imgs.length?`<div style="margin-top:14px"><h4 style="margin:0">Photos &amp; files (${imgs.length})</h4><div class="calimgs">${imgHTML}</div>${imgs.length>24?`<div class="muted" style="margin-top:6px">+${imgs.length-24} more in the project file.</div>`:""}</div>`:`<div class="muted" style="margin-top:12px">No photos on file for this job yet.</div>`}
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        ${card?`<button class="primary" onclick="closeCalJob();showView('board');openDrawer('${card.id}')">Open in Scheduling →</button>`:""}
+        ${proj?`<button onclick="closeCalJob();openProject('${proj.id}')">Open project file →</button>`:""}
+      </div>
+    </div></div>`;
 }
 
 function renderArchive(){
@@ -783,7 +1042,7 @@ function renderArchive(){
 
 /* ---------------- Drawer (the documented record) ---------------- */
 function openDrawer(id){ openId = id; editOpen = false; renderDrawer(); document.getElementById("overlay").classList.add("open"); document.getElementById("drawer").classList.add("open"); }
-function closeDrawer(){ openId = null; editOpen = false; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
+function closeDrawer(){ openId = null; editOpen = false; cbEditOpen = false; guideEditOpen = false; ccamEditOpen = false; document.getElementById("overlay").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); }
 function toggleEdit(){ editOpen = !editOpen; renderDrawer(); }
 async function deleteRequest(){
   if(!isEditor()) return;
@@ -801,7 +1060,7 @@ async function deleteRequest(){
   if(e2){ toast("Delete failed: " + e2.message); return; }
   closeDrawer(); await loadData(); toast("Request deleted");
 }
-function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Job files", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
+function typeLabel(t){ return {created:"Request logged", proposed:"Date proposed", countered:"Counter-proposal", approved:"Approved", accepted:"Counter accepted", comment:"Note", tracker:"Tracker updated", completed:"Install completed", archived:"Archived", unarchived:"Back on the board", guide:"Job files", corebridge:"CoreBridge order", edited:"Details edited", status:"Status changed", companycam:"CompanyCam project"}[t]||t; }
 function renderDrawer(){
   const r = requests.find(x=>x.id===openId); if(!r) return;
   const evs = reqEvents(r.id);
@@ -852,19 +1111,21 @@ function renderDrawer(){
     </div>
     <div class="dbody">
       ${r.cover_url ? `<img class="drawercover" src="${esc(r.cover_url)}" alt="">` : ""}
-      <dl class="kv">
+${isH && !r.archived && editOpen ? editFieldsHTML(r) : `<dl class="kv">
         <dt>STATUS</dt><dd><b>${esc(statusLabel(normStatus(r.status)))}</b>${r.archived?" (archived)":""}</dd>
-        <dt>SCOPE</dt><dd>${esc(r.scope||"—")}</dd>
-        <dt>HOURS</dt><dd>${r.hours!=null&&r.hours!==""?esc(r.hours):"—"}${r.heavy?' &nbsp;<span class="pill heavy">HEAVY LABOR</span>':""}</dd>
-        <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"—")}</dd>
-        <dt>PRODUCT DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"—"}</dd>
-        <dt>REQUESTED BY</dt><dd>${esc(r.requested_by||"—")}</dd>
-        ${(r.contact_name||r.contact_phone||r.contact_email)?`<dt>CONTACT</dt><dd>${esc([r.contact_name, r.contact_phone, r.contact_email].filter(Boolean).join(" • "))}</dd>`:""}
-        <dt>NOTES</dt><dd>${esc(r.notes||"—")}</dd>
-        ${r.agreed_date?`<dt>SCHEDULED</dt><dd><b>${fmtDate(r.agreed_date)} — ${esc(r.agreed_crew||"")}</b></dd>`:""}
-      </dl>
+        <dt>SCOPE</dt><dd>${esc(r.scope||"\u2014")}</dd>
+        <dt>HOURS</dt><dd>${r.hours!=null&&r.hours!==""?esc(r.hours):"\u2014"}${r.heavy?' &nbsp;<span class="pill heavy">HEAVY LABOR</span>':""}</dd>
+        <dt>CREW ASK</dt><dd>${esc(r.crew_needed||"\u2014")}</dd>
+        <dt>SITE</dt><dd>${r.site_env?esc(r.site_env):"\u2014"}${r.digging?' &nbsp;<span class="pill dig">DIGGING REQUIRED</span>':""}</dd>
+        <dt>PRODUCT DUE DATE</dt><dd>${r.due_date?fmtDate(r.due_date):"\u2014"}</dd>
+        <dt>REQUESTED BY</dt><dd>${esc(r.requested_by||"\u2014")}</dd>
+        ${(r.contact_name||r.contact_phone||r.contact_email)?`<dt>CONTACT</dt><dd>${esc([r.contact_name, r.contact_phone, r.contact_email].filter(Boolean).join(" \u2022 "))}</dd>`:""}
+        <dt>NOTES</dt><dd>${esc(r.notes||"\u2014")}</dd>
+        ${r.agreed_date?`<dt>SCHEDULED</dt><dd><b>${fmtDate(r.agreed_date)} \u2014 ${esc(r.agreed_crew||"")}</b></dd>`:""}
+      </dl>`}
       ${guideSection(r)}
       ${companycamSection(r)}
+      ${corebridgeSection(r)}
       <h3 style="color:var(--navy);font-size:13px;letter-spacing:.5px;margin:4px 0 2px">SCHEDULING HISTORY — ON THE RECORD</h3>
       <div class="thread">${evs.map(e=>`
         <div class="event ${e.type}">
@@ -875,7 +1136,6 @@ function renderDrawer(){
           ${e.body?`<div class="body">${esc(e.body)}</div>`:""}
         </div>`).join("")}
       </div>
-      ${isH && !r.archived && editOpen ? editSection(r) : ""}
       ${actions}
       <div style="margin-top:16px"><button class="ghost" onclick="closeDrawer()">← Back to board</button></div>
     </div>`;
@@ -884,7 +1144,7 @@ function proposeForm(title, btn){
   return `<label>${title}</label>
     <div class="grid2">
       <div><input type="date" id="aDate"></div>
-      <div><input type="text" id="aCrew" placeholder="Crew — Eli / George / Eli + George"></div>
+      <div>${crewSelectHTML("aCrew","")}</div>
     </div>
     <label>Note</label><textarea id="aBody" placeholder="Why this date — what's already on the schedule, product readiness, customer timing"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="submitProposal()">${btn}</button></div>`;
@@ -894,7 +1154,7 @@ function proposeForm(title, btn){
 function evBase(type){ return {id:uid(), request_id:openId, actor:actor, type:type, body:"", date:null, crew:null, created_at:nowISO()}; }
 async function submitProposal(){
   const date = document.getElementById("aDate").value;
-  const crew = document.getElementById("aCrew").value.trim();
+  const crew = crewValue("aCrew");
   const body = document.getElementById("aBody").value.trim();
   if(!date){ toast("Pick a date first"); return; }
   const r = requests.find(x=>x.id===openId);
@@ -1016,7 +1276,44 @@ async function removeCompanycam(){
   await addEvent(ev, {companycam_url:null, companycam_name:null});
   toast("CompanyCam link removed");
 }
+/* ---------------- CoreBridge order link ---------------- */
+function corebridgeSection(r){
+  let inner = "";
+  if(r.corebridge_url){
+    inner += `<div class="row">
+        <button class="primary" onclick="window.open('${esc(r.corebridge_url)}','_blank')">Open CoreBridge order</button>
+        ${isEditor() ? `<button onclick="toggleCbEdit()">${cbEditOpen?"Cancel":"Replace link"}</button>
+        <button class="red" onclick="removeCorebridge()">Remove</button>` : ""}
+      </div>`;
+  } else {
+    inner += `<div class="muted" style="margin-bottom:8px">No CoreBridge order linked yet.${isEditor() ? " Paste the order link below." : ""}</div>`;
+  }
+  if(isEditor() && (!r.corebridge_url || cbEditOpen)){
+    inner += `<label>CoreBridge order link</label>
+      <input type="text" id="cbUrl" placeholder="Paste the CoreBridge order link">
+      <div class="row" style="margin-top:8px"><button class="primary" onclick="attachCorebridge()">Link order</button></div>`;
+  }
+  return `<div class="actions"><h4>COREBRIDGE</h4>${inner}</div>`;
+}
+function toggleCbEdit(){ cbEditOpen = !cbEditOpen; renderDrawer(); }
+async function attachCorebridge(){
+  if(!isEditor()) return;
+  const url = document.getElementById("cbUrl").value.trim();
+  if(!url || !/^https?:\/\//i.test(url)){ toast("Paste a valid CoreBridge link first"); return; }
+  const ev = evBase("corebridge"); ev.body = "CoreBridge order linked.";
+  cbEditOpen = false;
+  await addEvent(ev, {corebridge_url:url});
+  toast("CoreBridge order linked");
+}
+async function removeCorebridge(){
+  if(!isEditor()) return;
+  const ev = evBase("corebridge"); ev.body = "CoreBridge order link removed.";
+  cbEditOpen = false;
+  await addEvent(ev, {corebridge_url:null});
+  toast("CoreBridge link removed");
+}
 async function markTracker(){
+
   const ev = evBase("tracker"); ev.body = "Tracker and systems updated.";
   await addEvent(ev, null);
   toast("Marked tracker updated");
@@ -1050,54 +1347,45 @@ async function setStatus(id, value){
   toast("Status set to " + statusLabel(value));
 }
 function quickStatus(id, value){ setStatus(id, value); }
-function editSection(r){
+function editFieldsHTML(r){
   const st = normStatus(r.status);
   const typeOpts = Object.keys(TYPE_META).map(k=>`<option value="${k}" ${reqType(r)===k?"selected":""}>${TYPE_META[k].label}</option>`).join("");
   const statusOpts = STATUSES.map(s=>`<option value="${s.id}" ${st===s.id?"selected":""}>${statusLabel(s.id)}</option>`).join("") + `<option value="closed" ${st==="closed"?"selected":""}>Closed & Archived</option>`;
-  return `<div class="actions"><h4>EDIT DETAILS — HANNAH</h4>
-    <label>Status</label><select id="eStatus">${statusOpts}</select>
-    <div class="grid2">
-      <div><label>Job #</label><input type="text" id="eJob" value="${esc(r.job_number||"")}"></div>
-      <div><label>Customer</label><input type="text" id="eCustomer" value="${esc(r.customer||"")}"></div>
+  const envOpts = ["","Indoor","Outdoor","Indoor + Outdoor"].map(v=>`<option value="${v}" ${(r.site_env||"")===v?"selected":""}>${v||"\u2014 not set \u2014"}</option>`).join("");
+  return `<div class="actions" style="margin-bottom:12px"><h4>EDITING \u2014 CHANGE ANY FIELD, THEN SAVE</h4>
+  <dl class="kv">
+    <dt>STATUS</dt><dd><select id="eStatus">${statusOpts}</select></dd>
+    <dt>JOB #</dt><dd><input type="text" id="eJob" value="${esc(r.job_number||"")}"></dd>
+    <dt>CUSTOMER</dt><dd><input type="text" id="eCustomer" value="${esc(r.customer||"")}"></dd>
+    <dt>ADDRESS</dt><dd><input type="text" id="eAddress" value="${esc(r.address||"")}"></dd>
+    <dt>SCOPE</dt><dd><textarea id="eScope">${esc(r.scope||"")}</textarea></dd>
+    <dt>TYPE</dt><dd><select id="eType">${typeOpts}</select></dd>
+    <dt>HOURS</dt><dd><input type="number" step="0.1" id="eHours" value="${r.hours!=null&&r.hours!==""?esc(r.hours):""}"></dd>
+    <dt>CREW NEEDED</dt><dd>${crewSelectHTML("eCrew", r.crew_needed||"")}</dd>
+    <dt>SITE</dt><dd><select id="eEnv">${envOpts}</select></dd>
+    <dt>DIGGING</dt><dd><label style="display:inline"><input type="checkbox" id="eDig" ${r.digging?"checked":""} style="width:auto"> Digging required</label></dd>
+    <dt>HEAVY LABOR</dt><dd><label style="display:inline"><input type="checkbox" id="eHeavy" ${r.heavy?"checked":""} style="width:auto"> Heavy labor (flags Eli's load)</label></dd>
+    <dt>PRODUCT DUE DATE</dt><dd>${dateFieldHTML("eDue", r.due_date||"")}</dd>
+    <dt>REQUESTED BY</dt><dd><input type="text" id="eRequester" value="${esc(r.requested_by||"")}"></dd>
+    <dt>CONTACT NAME</dt><dd><input type="text" id="eContactName" value="${esc(r.contact_name||"")}"></dd>
+    <dt>CONTACT PHONE</dt><dd><input type="text" id="eContactPhone" value="${esc(r.contact_phone||"")}"></dd>
+    <dt>CONTACT EMAIL</dt><dd><input type="text" id="eContactEmail" value="${esc(r.contact_email||"")}"></dd>
+    <dt>SCHEDULED DATE</dt><dd>${dateFieldHTML("eSchedDate", r.agreed_date||"")}</dd>
+    <dt>SCHEDULED CREW</dt><dd>${crewSelectHTML("eSchedCrew", r.agreed_crew||"")}</dd>
+    <dt>NOTES</dt><dd><textarea id="eNotes">${esc(r.notes||"")}</textarea></dd>
+  </dl>
+  <div style="margin-top:10px">
+    <label>Cover photo</label>
+    ${r.cover_url ? `<img class="coverprev" src="${esc(r.cover_url)}" alt="">` : `<div class="muted">No cover photo yet \u2014 it shows at the top of the card.</div>`}
+    <div class="row" style="margin-top:6px">
+      <label class="uploadbtn">${r.cover_url ? "Replace photo" : "+ Upload cover photo"}<input type="file" accept="image/*" style="display:none" onchange="coverUpload(this)"></label>
+      ${r.cover_url ? `<button type="button" style="color:#B3261E" onclick="coverRemove()">Remove photo</button>` : ""}
     </div>
-    <label>Address</label><input type="text" id="eAddress" value="${esc(r.address||"")}">
-    <label>Scope</label><textarea id="eScope">${esc(r.scope||"")}</textarea>
-    <div class="grid2">
-      <div><label>Type</label><select id="eType">${typeOpts}</select></div>
-      <div><label>Hours</label><input type="number" step="0.1" id="eHours" value="${r.hours!=null&&r.hours!==""?esc(r.hours):""}"></div>
-    </div>
-    <div class="grid2">
-      <div><label>Crew needed</label><input type="text" id="eCrew" value="${esc(r.crew_needed||"")}"></div>
-      <div><label>Product due date</label><input type="date" id="eDue" value="${r.due_date||""}"></div>
-    </div>
-    <div class="grid2">
-      <div><label>Requested by</label><input type="text" id="eRequester" value="${esc(r.requested_by||"")}"></div>
-      <div style="padding-top:22px"><label style="display:inline"><input type="checkbox" id="eHeavy" ${r.heavy?"checked":""} style="width:auto"> Heavy labor</label></div>
-    </div>
-    <div class="grid2">
-      <div><label>Contact name</label><input type="text" id="eContactName" value="${esc(r.contact_name||"")}"></div>
-      <div><label>Contact phone</label><input type="text" id="eContactPhone" value="${esc(r.contact_phone||"")}"></div>
-    </div>
-    <div class="grid2">
-      <div><label>Contact email</label><input type="text" id="eContactEmail" value="${esc(r.contact_email||"")}"></div>
-      <div><label>Scheduled date</label><input type="date" id="eSchedDate" value="${r.agreed_date||""}"></div>
-    </div>
-    <div class="grid2">
-      <div><label>Scheduled crew</label><input type="text" id="eSchedCrew" value="${esc(r.agreed_crew||"")}" placeholder="Eli / George / Eli + George"></div>
-      <div></div>
-    </div>
-    <label>Notes</label><textarea id="eNotes">${esc(r.notes||"")}</textarea>
-    <div style="margin-top:12px">
-      <label>Cover photo</label>
-      ${r.cover_url ? `<img class="coverprev" src="${esc(r.cover_url)}" alt="">` : `<div class="muted">No cover photo yet — it shows at the top of the card.</div>`}
-      <div class="row" style="margin-top:6px">
-        <label class="uploadbtn">${r.cover_url ? "Replace photo" : "+ Upload cover photo"}<input type="file" accept="image/*" style="display:none" onchange="coverUpload(this)"></label>
-        ${r.cover_url ? `<button type="button" style="color:#B3261E" onclick="coverRemove()">Remove photo</button>` : ""}
-      </div>
-    </div>
-    <div class="row" style="margin-top:8px"><button class="primary" onclick="saveEdit()">Save changes</button></div>
+  </div>
+  <div class="row" style="margin-top:12px"><button class="primary" onclick="saveEdit()">Save changes</button><button onclick="toggleEdit()">Cancel</button></div>
   </div>`;
 }
+
 async function saveEdit(){
   if(!isEditor()) return;
   const r = requests.find(x=>x.id===openId); if(!r) return;
@@ -1110,15 +1398,17 @@ async function saveEdit(){
     scope: document.getElementById("eScope").value.trim(),
     type: document.getElementById("eType").value,
     hours: h===""?null:parseFloat(h),
-    crew_needed: document.getElementById("eCrew").value.trim(),
+    crew_needed: crewValue("eCrew"),
     due_date: document.getElementById("eDue").value||null,
     requested_by: document.getElementById("eRequester").value.trim(),
     heavy: document.getElementById("eHeavy").checked,
+    site_env: document.getElementById("eEnv").value || null,
+    digging: document.getElementById("eDig").checked,
     contact_name: document.getElementById("eContactName").value.trim(),
     contact_phone: document.getElementById("eContactPhone").value.trim(),
     contact_email: document.getElementById("eContactEmail").value.trim(),
     agreed_date: document.getElementById("eSchedDate").value || null,
-    agreed_crew: document.getElementById("eSchedCrew").value.trim(),
+    agreed_crew: crewValue("eSchedCrew"),
     notes: document.getElementById("eNotes").value.trim(),
     status: newStatus
   };
@@ -1146,12 +1436,16 @@ async function createRequest(){
     hours: h===""?null:parseFloat(h), due_date:document.getElementById("nDue").value||null,
     crew_needed:document.getElementById("nCrew").value.trim(), requested_by:document.getElementById("nRequester").value.trim(),
     notes:document.getElementById("nNotes").value.trim(), heavy:document.getElementById("nHeavy").checked,
+    site_env:document.getElementById("nEnv").value||null, digging:document.getElementById("nDig").checked,
+    corebridge_url:document.getElementById("nCb").value.trim()||null,
     status:"new", agreed_date:null, agreed_crew:null, archived:false, created_at:nowISO() };
   const ev = { id:uid(), request_id:r.id, actor:actor, type:"created", body:"Request logged.", date:null, crew:null, created_at:nowISO() };
   await addRequest(r, ev);
   closeNew();
-  ["nJob","nCustomer","nAddress","nScope","nHours","nDue","nCrew","nRequester","nNotes"].forEach(i=>document.getElementById(i).value="");
+  ["nJob","nCustomer","nAddress","nScope","nHours","nDue","nCrew","nRequester","nNotes","nCb"].forEach(i=>document.getElementById(i).value="");
   document.getElementById("nHeavy").checked = false;
+  document.getElementById("nDig").checked = false;
+  document.getElementById("nEnv").value = "";
   toast("Request added to the board");
 }
 
