@@ -423,6 +423,7 @@
   <div class="caldow"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div>
   <div class="calgrid" id="trkCalGrid"></div>
   <div id="trkDetail"></div>
+  <div id="trkSubs"></div>
   <h3 style="margin:26px 0 4px;color:var(--navy)">REMAINING JOBS — BY STATUS</h3>
   <p class="muted" style="margin:0 0 12px">Every job on the tracker that doesn't have a set install date yet — grouped by its tracker status. This page refreshes with every tracker scan (weekday mornings, and every 30 minutes Mon\u2013Fri 8\u20136).</p>
   <div id="trkGroups"></div>
@@ -950,9 +951,13 @@ function renderTracker(){
   const det = document.getElementById("trkDetail");
   if(det) det.innerHTML = calDayDetailHTML(trkSelDay);
   const rest = trackerRows.filter(r=>!r.install_date);
+  const subs = rest.filter(r=>r.subcontracted);
+  const sel = document.getElementById("trkSubs");
+  if(sel) sel.innerHTML = subs.length ? `<h3 style="margin:26px 0 4px;color:var(--navy)">SUBCONTRACTED INSTALLS <span class="count">${subs.length}</span></h3><p class="muted" style="margin:0 0 12px">Installs handed to a subcontractor — kept in their own section, out of the status groups below.</p>${subs.map(trkRowHTML).join("")}` : "";
+  const normal = rest.filter(r=>!r.subcontracted && (r.status||"").trim());
   const order = ["NEW","Pre-planning","Planning","Scheduled","On Hold","Completed"];
   const groups = {};
-  rest.forEach(r=>{ const s = (r.status||"").trim(); (groups[s] = groups[s]||[]).push(r); });
+  normal.forEach(r=>{ const s = (r.status||"").trim(); (groups[s] = groups[s]||[]).push(r); });
   const keys = Object.keys(groups).sort((a,b)=>{
     const ia = order.indexOf(a), ib = order.indexOf(b);
     return (ia<0?50:ia) - (ib<0?50:ib) || a.localeCompare(b);
@@ -966,7 +971,7 @@ function renderTracker(){
 function trkRowHTML(r){
   const meta = [r.rep?("Rep: "+esc(r.rep)):"", r.crew?("Crew: "+esc(r.crew)):"", r.hours!=null?esc(r.hours)+" hrs":"", r.priority?("Priority: "+esc(r.priority)):"", r.int_ext?esc(r.int_ext):"", r.product_status?("Product: "+esc(r.product_status)):"", r.site_status?("Site: "+esc(r.site_status)):"", r.due_date?("CB due "+fmtDate(r.due_date)):"", r.date_text?("Date note: "+esc(r.date_text)):""].filter(Boolean).join(" \u2022 ");
   return `<div class="trkcard">
-    <div><b>${esc(r.order_number||"\u2014")}</b> \u2014 ${esc(r.customer||"")}${r.leg?` <span class="muted">(${esc(r.leg)})</span>`:""} <span class="pill ${typeMeta(r.type_key||"install").pill}">${typeMeta(r.type_key||"install").label}</span>${r.status?` <span class="pill">${esc(r.status)}</span>`:""}</div>
+    <div><b>${esc(r.order_number||"\u2014")}</b> \u2014 ${esc(r.customer||"")}${r.leg?` <span class="muted">(${esc(r.leg)})</span>`:""} <span class="pill ${typeMeta(r.type_key||"install").pill}">${typeMeta(r.type_key||"install").label}</span>${r.status?` <span class="pill">${esc(r.status)}</span>`:""}${r.subcontracted?` <span class="pill cb">SUBCONTRACTED</span>`:""}</div>
     ${meta?`<div class="muted">${meta}</div>`:""}
     ${r.address?`<div class="muted">${esc(r.address)}</div>`:""}
     ${r.scope?`<div class="muted" style="white-space:pre-wrap;margin-top:3px">${esc(String(r.scope).slice(0,300))}${String(r.scope).length>300?"\u2026":""}</div>`:""}
